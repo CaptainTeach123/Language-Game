@@ -4,7 +4,7 @@
  * tools/build-sw.js; VERSION changes whenever any file changes, which makes
  * phones fetch the new version.
  */
-const VERSION = 'f3bf37d4b3';
+const VERSION = '3cbe9ae6fc';
 const CACHE = 'word-wizard-' + VERSION;
 const ASSETS = [
   // ASSETS-START
