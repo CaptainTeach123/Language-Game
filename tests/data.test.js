@@ -140,7 +140,7 @@ test('the app is called Word Wizard and the mascot is a wizard', () => {
     assert.ok(read(f).includes('Word Wizard'), f);
     assert.ok(!/Word Buddies|\bPip\b/.test(read(f)), `${f} still mentions the old name`);
   });
-  assert.ok(/var WIZARD_SVG =/.test(read('js/app.js')));
+  assert.ok(read('js/app.js').includes('img/ui/wizard.png') && exists('img/ui/wizard.png'), 'the wizard picture');
 });
 
 test('images referenced by the app exist', () => {

@@ -243,77 +243,17 @@
   var PENCIL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.2L15.8 5.2a1.8 1.8 0 0 1 2.6 0l.4.4a1.8 1.8 0 0 1 0 2.6L8.2 18.8 4 20z" fill="none" stroke="#5C5C80" stroke-width="2" stroke-linejoin="round"/></svg>';
   var SHARE_SVG = '<svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4" stroke="#2F7BFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6v11h12V10h-2" stroke="#2F7BFF" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg>';
 
-  // Anthony's guide: a little cartoon wizard (tools/make-icons.js turns it into the app icon).
-  var WIZARD_SVG =
-    '<svg viewBox="0 0 200 210" aria-hidden="true">' +
-    '<defs>' +
-    '<linearGradient id="wizRobe" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0" stop-color="#4F7BFF"/>' +
-    '<stop offset="1" stop-color="#3B3FC9"/>' +
-    '</linearGradient>' +
-    '<linearGradient id="wizHat" x1="0" y1="0" x2="1" y2="1">' +
-    '<stop offset="0" stop-color="#B47CFF"/>' +
-    '<stop offset="1" stop-color="#6A2FC2"/>' +
-    '</linearGradient>' +
-    '<radialGradient id="wizFace" cx="40%" cy="35%" r="70%">' +
-    '<stop offset="0" stop-color="#FFE7D3"/>' +
-    '<stop offset="1" stop-color="#F6B98E"/>' +
-    '</radialGradient>' +
-    '</defs>' +
-    '<ellipse cx="100" cy="203" rx="52" ry="6" fill="rgba(38,38,74,.18)"/>' +
-    '<g class="wiz-bob">' +
-    '<ellipse cx="82" cy="199" rx="15" ry="7" fill="#7A4A2A"/>' +
-    '<ellipse cx="118" cy="199" rx="15" ry="7" fill="#7A4A2A"/>' +
-    '<path d="M72 138 Q100 128 128 138 Q140 168 146 192 Q100 204 54 192 Q60 168 72 138Z" fill="url(#wizRobe)"/>' +
-    '<path d="M100 150 L100 196" stroke="#2F2FA8" stroke-width="3" stroke-linecap="round" opacity=".45"/>' +
-    '<path d="M80.0 170.0 L81.5 173.9 L85.7 174.1 L82.5 176.8 L83.5 180.9 L80.0 178.6 L76.5 180.9 L77.5 176.8 L74.3 174.1 L78.5 173.9Z" fill="#FFD23F"/>' +
-    '<path d="M122.0 161.0 L123.3 164.2 L126.8 164.5 L124.1 166.7 L124.9 170.0 L122.0 168.2 L119.1 170.0 L119.9 166.7 L117.2 164.5 L120.7 164.2Z" fill="#FFD23F"/>' +
-    '<circle cx="114" cy="186" r="2.2" fill="#FFD23F"/>' +
-    '<circle cx="88" cy="158" r="1.8" fill="#FFD23F"/>' +
-    '<g class="wiz-arm-l">' +
-    '<path d="M80 146 Q62 152 52 170" stroke="#4466F2" stroke-width="17" stroke-linecap="round" fill="none"/>' +
-    '<circle cx="50" cy="174" r="8.5" fill="#F9C9A4"/>' +
-    '</g>' +
-    '<g class="wiz-arm-r">' +
-    '<path d="M120 146 Q140 146 150 130" stroke="#4466F2" stroke-width="17" stroke-linecap="round" fill="none"/>' +
-    '<path d="M151 130 L171 96" stroke="#8B5A2B" stroke-width="5.5" stroke-linecap="round"/>' +
-    '<path class="wiz-wand" d="M173.0 79.0 L175.9 87.0 L184.4 87.3 L177.8 92.5 L180.1 100.7 L173.0 96.0 L165.9 100.7 L168.2 92.5 L161.6 87.3 L170.1 87.0Z" fill="#FFD23F" stroke="#F2A900" stroke-width="1.5" stroke-linejoin="round"/>' +
-    '<circle cx="151" cy="131" r="8.5" fill="#F9C9A4"/>' +
-    '</g>' +
-    '<ellipse cx="66" cy="104" rx="8" ry="10" fill="#8A5A3A"/>' +
-    '<ellipse cx="134" cy="104" rx="8" ry="10" fill="#8A5A3A"/>' +
-    '<circle cx="100" cy="112" r="36" fill="url(#wizFace)"/>' +
-    '<g class="wiz-eyes">' +
-    '<ellipse cx="86" cy="110" rx="9" ry="11" fill="#fff"/>' +
-    '<ellipse cx="114" cy="110" rx="9" ry="11" fill="#fff"/>' +
-    '<circle cx="87.5" cy="112" r="6" fill="#26264A"/>' +
-    '<circle cx="112.5" cy="112" r="6" fill="#26264A"/>' +
-    '<circle cx="90" cy="109" r="2.2" fill="#fff"/>' +
-    '<circle cx="115" cy="109" r="2.2" fill="#fff"/>' +
-    '</g>' +
-    '<ellipse cx="100" cy="120" rx="3.4" ry="2.4" fill="#EE9C74"/>' +
-    '<ellipse cx="73" cy="126" rx="7" ry="4.5" fill="#FF7EB6" opacity=".7"/>' +
-    '<ellipse cx="127" cy="126" rx="7" ry="4.5" fill="#FF7EB6" opacity=".7"/>' +
-    '<path class="wiz-smile" d="M90 127 Q100 138 110 127" stroke="#26264A" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-    '<g class="wiz-mouth">' +
-    '<ellipse cx="100" cy="131" rx="8" ry="7" fill="#5A1033"/>' +
-    '<ellipse cx="100" cy="135" rx="5" ry="2.6" fill="#FF6F91"/>' +
-    '</g>' +
-    '<path d="M60 86 Q74 56 90 30 Q100 14 124 9 Q112 24 114 38 Q126 62 140 86Z" fill="url(#wizHat)"/>' +
-    '<path d="M64 78 Q100 70 136 78 L139 86 Q100 78 61 86Z" fill="#FFD23F"/>' +
-    '<ellipse cx="100" cy="86" rx="50" ry="9" fill="#5B2BB5"/>' +
-    '<path class="wiz-star" d="M102.0 41.0 L104.7 48.3 L112.5 48.6 L106.4 53.4 L108.5 60.9 L102.0 56.6 L95.5 60.9 L97.6 53.4 L91.5 48.6 L99.3 48.3Z" fill="#FFD23F"/>' +
-    '<circle cx="84" cy="64" r="2.4" fill="#FFE98A"/>' +
-    '<circle cx="118" cy="40" r="2" fill="#FFE98A"/>' +
-    '<path d="M124.0 3.0 L125.8 7.6 L130.7 7.8 L126.9 10.9 L128.1 15.7 L124.0 13.0 L119.9 15.7 L121.1 10.9 L117.3 7.8 L122.2 7.6Z" fill="#FFD23F"/>' +
-    '</g>' +
-    '</svg>';
-
+  // Anthony's guide: the Word Wizard. Two pictures that differ only in the
+  // mouth (img/ui/wizard.png, wizard-talk.png) take turns while he talks.
+  // tools/make-icons.js makes the app icon from the first one.
   function mascot(cls) {
-    return h('div', { class: 'mascot' + (cls ? ' ' + cls : ''), html: WIZARD_SVG });
+    return h('div', { class: 'mascot' + (cls ? ' ' + cls : '') },
+      h('div', { class: 'frames' },
+        h('img', { src: 'img/ui/wizard.png', alt: '', draggable: 'false' }),
+        h('img', { class: 'talk', src: 'img/ui/wizard-talk.png', alt: '', draggable: 'false' })));
   }
 
-  // The wizard's mouth moves when talking, except during find-the-picture rounds,
+  // The wizard's mouth moves (and he nods along) while talking, except during find-the-picture rounds,
   // where nothing on screen should move while the word is being said.
   Speech.onTalk = function (on) {
     var list = document.querySelectorAll('.mascot:not(.still)');

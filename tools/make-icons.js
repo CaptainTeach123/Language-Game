@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Renders the app icons (the little wizard on a sky background) with Playwright.
+ * Renders the app icons (the wizard picture on a sky background) with Playwright.
  *   NODE_PATH=$(npm root -g) node tools/make-icons.js
  */
 'use strict';
@@ -9,12 +9,10 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const ROOT = path.join(__dirname, '..');
-const appSrc = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
-const m = appSrc.match(/var WIZARD_SVG =([\s\S]*?);\n/);
-const WIZARD_SVG = new Function('return (' + m[1].trim() + ');')();
+const WIZARD = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'img/ui/wizard.png')).toString('base64');
 
 function page(size, scale) {
-  return `<!doctype html><html><head><style>.wiz-mouth{display:none}</style></head><body style="margin:0">
+  return `<!doctype html><html><head></head><body style="margin:0">
   <div style="width:${size}px;height:${size}px;position:relative;overflow:hidden;
     background:linear-gradient(180deg,#38B6F5 0%,#7FD3FA 55%,#BDEBFF 100%)">
     <svg viewBox="0 0 400 120" preserveAspectRatio="none" style="position:absolute;left:0;bottom:0;width:100%;height:30%">
@@ -22,7 +20,7 @@ function page(size, scale) {
       <path d="M0 85 Q 110 50 220 85 T 400 78 V120 H0Z" fill="#6CCB4E"/>
     </svg>
     <div style="position:absolute;width:${scale * 100}%;height:${scale * 105}%;left:${(1 - scale) * 50}%;top:${(1 - scale * 1.05) * 50 + 3}%">
-      ${WIZARD_SVG.replace('<svg ', '<svg style="width:100%;height:100%" ')}
+      <img src="${WIZARD}" style="width:100%;height:100%;object-fit:contain;object-position:center bottom">
     </div>
   </div></body></html>`;
 }

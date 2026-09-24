@@ -4,7 +4,7 @@
  * tools/build-sw.js; VERSION changes whenever any file changes, which makes
  * phones fetch the new version.
  */
-const VERSION = '3cbe9ae6fc';
+const VERSION = '22c09b1986';
 const CACHE = 'word-wizard-' + VERSION;
 const ASSETS = [
   // ASSETS-START
@@ -216,6 +216,8 @@ const ASSETS = [
   'img/ui/search.png',
   'img/ui/speaker.png',
   'img/ui/star.png',
+  'img/ui/wizard-talk.png',
+  'img/ui/wizard.png',
   'audio/apple-find.mp3',
   'audio/apple-here.mp3',
   'audio/apple-phrase.mp3',

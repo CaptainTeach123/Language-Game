@@ -138,7 +138,7 @@ async function run() {
     await shot(page, '02-pick-words.png');
     await tap(page, '.welcome .btn.green');
     await page.waitForSelector('.play-btn');
-    if (!(await page.$('.home .mascot .wiz-wand'))) errors.push('the wizard is missing');
+    if (!(await page.$('.home .mascot img'))) errors.push('the wizard is missing');
     const logo = await page.getAttribute('.logo', 'aria-label');
     if (logo !== 'Word Wizard') errors.push(`logo says ${logo}`);
     await shot(page, '03-home.png');

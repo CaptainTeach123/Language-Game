@@ -211,33 +211,20 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 /* ------------------------------------------------------------------ */
 
 .mascot { position: relative; flex: none; }
-.mascot svg { width: 100%; height: 100%; overflow: visible; display: block; }
-.wiz-bob { animation: bob 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
-.wiz-eyes { animation: blink 4.2s infinite; transform-box: fill-box; transform-origin: center; }
-.wiz-mouth { opacity: 0; transform-box: fill-box; transform-origin: center; }
-.mascot.talking .wiz-smile { opacity: 0; }
-.mascot.talking .wiz-mouth { opacity: 1; animation: talk 0.22s ease-in-out infinite alternate; }
-.wiz-arm-l, .wiz-arm-r { transform-box: view-box; }
-.wiz-arm-l { transform-origin: 80px 146px; }  /* the shoulders, in the wizard's own coordinates */
-.wiz-arm-r { transform-origin: 120px 146px; }
-.mascot.waving .wiz-arm-r { animation: arm-wave 0.5s ease-in-out 4 alternate; }
-.mascot.happy .wiz-bob { animation: jump 0.5s ease-out 2; }
-.mascot.happy .wiz-arm-l { animation: arm-up-l 0.5s ease-out 2; }
-.mascot.happy .wiz-arm-r { animation: arm-up-r 0.5s ease-out 2; }
-.mascot.listening .wiz-bob { animation: tilt 1.6s ease-in-out infinite; }
-/* The stars on the wizard's hat and wand twinkle. */
-.wiz-star, .wiz-wand { animation: twinkle 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.wiz-wand { animation-delay: 1.2s; }
-.mascot.waving .wiz-wand { animation: twinkle 0.5s ease-in-out 4; }
-@keyframes twinkle { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.2) rotate(14deg); } }
-
+.mascot .frames { position: relative; width: 100%; height: 100%; transform-origin: 50% 100%;
+  filter: drop-shadow(0 8px 8px rgba(38, 38, 74, 0.22)); animation: bob 2.6s ease-in-out infinite; }
+.mascot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
+.mascot img.talk { opacity: 0; }
+.mascot.talking img.talk { animation: mouth 0.3s steps(1, end) infinite; }
+.mascot.talking .frames { animation: talk-nod 0.45s ease-in-out infinite alternate; }
+.mascot.waving .frames { animation: wave-tilt 0.5s ease-in-out 4 alternate; }
+.mascot.happy .frames { animation: jump 0.5s ease-out 2; }
+.mascot.listening .frames { animation: tilt 1.6s ease-in-out infinite; }
 @keyframes bob { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-5px) scale(1.02, 0.98); } }
-@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
-@keyframes talk { from { transform: scaleY(0.35); } to { transform: scaleY(1.05); } }
+@keyframes mouth { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes talk-nod { from { transform: translateY(0) rotate(-1.5deg); } to { transform: translateY(-4px) rotate(1.5deg) scale(1.02); } }
 @keyframes jump { 0% { transform: translateY(0); } 40% { transform: translateY(-26px) scale(0.95, 1.06); } 80% { transform: translateY(0) scale(1.08, 0.92); } 100% { transform: translateY(0); } }
-@keyframes arm-wave { from { transform: rotate(12deg); } to { transform: rotate(-22deg); } }
-@keyframes arm-up-l { 50% { transform: rotate(60deg); } }
-@keyframes arm-up-r { 50% { transform: rotate(-60deg); } }
+@keyframes wave-tilt { from { transform: rotate(-4deg); } to { transform: rotate(5deg) translateY(-6px); } }
 @keyframes tilt { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
 
 /* ------------------------------------------------------------------ */
@@ -857,7 +844,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 
 /* Respect "Reduce Motion": keep the short tap feedback, stop the looping motion. */
 @media (prefers-reduced-motion: reduce) {
-  .cloud, .logo span, .play-btn, .wiz-bob, .wiz-star, .wiz-wand, .next-btn, .gift, .choice.hint, .prize::before, .big-card.tap-me { animation: none !important; }
+  .cloud, .logo span, .play-btn, .mascot .frames, .mascot img.talk, .next-btn, .gift, .choice.hint, .prize::before, .big-card.tap-me { animation: none !important; }
   .stage.enter { animation-duration: 0.01ms; }
 }
 
@@ -866,10 +853,8 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 /* ------------------------------------------------------------------ */
 
 body.calm .cloud { animation-play-state: paused; }
-.mascot.still .wiz-bob, .mascot.still .wiz-eyes, .mascot.still .wiz-star, .mascot.still .wiz-wand { animation: none; }
-.mascot.still.happy .wiz-bob { animation: jump 0.5s ease-out 2; }
-.mascot.still.happy .wiz-arm-l { animation: arm-up-l 0.5s ease-out 2; }
-.mascot.still.happy .wiz-arm-r { animation: arm-up-r 0.5s ease-out 2; }
+.mascot.still .frames { animation: none; }
+.mascot.still.happy .frames { animation: jump 0.5s ease-out 2; }
 
 /* ------------------------------------------------------------------ */
 /* Grown-up cards in the child screens                                 */

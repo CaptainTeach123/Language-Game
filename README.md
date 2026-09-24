@@ -113,4 +113,4 @@ npm run icons    # re-render the app icons from the wizard (needs Playwright)
 - Voice and word photos: made with [ElevenLabs](https://elevenlabs.io).
 - Stickers and icons: [Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT License (`img/LICENSE-fluent-emoji.txt`).
 - Font: [Fredoka](https://github.com/hafontia/Fredoka-One), SIL Open Font License (`fonts/OFL.txt`).
-- The wizard, app icons and sound effects are drawn and synthesized in code.
+- The wizard: made with ElevenLabs image generation and chosen by Anthony's family; the app icons are rendered from it (`tools/make-icons.js`). Sound effects are synthesized in code.
