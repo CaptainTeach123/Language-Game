@@ -159,7 +159,8 @@ test('images referenced by the app exist', () => {
   });
   const manifest = JSON.parse(read('manifest.webmanifest'));
   manifest.icons.forEach((i) => assert.ok(exists(i.src), `manifest icon missing ${i.src}`));
-  fs.readdirSync(path.join(ROOT, 'img/ui')).forEach((f) => assert.ok(src.includes(`img/ui/${f}`) || src.includes(`modeBtn('${f.replace('.png', '')}'`), `unused icon ${f}`));
+  const css = read('css/app.css');
+  fs.readdirSync(path.join(ROOT, 'img/ui')).forEach((f) => assert.ok(src.includes(`img/ui/${f}`) || css.includes(`img/ui/${f}`) || src.includes(`modeBtn('${f.replace('.png', '')}'`), `unused icon ${f}`));
 });
 
 test('the offline file list is up to date', () => {

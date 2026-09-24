@@ -438,8 +438,6 @@
       'It opens full screen like an app, works offline, and keeps progress safe.' });
   }
 
-  var SUPPORT_NOTE = 'This game supports, but does not replace, speech-language therapy and everyday talk.';
-
   /* ------------------------------------------------------------------ */
   /* Welcome (first run)                                                 */
   /* ------------------------------------------------------------------ */
@@ -480,7 +478,6 @@
         h('p', { class: 'p-muted', text: 'Pick up to 4. We\'ll start with these and add 1 or 2 new words at a time. Not sure? Just tap Start.' }),
         grid,
         start,
-        h('p', { class: 'p-muted', text: SUPPORT_NOTE }),
         installTip()
       )
     ));
@@ -513,7 +510,7 @@
       h('img', { src: 'img/ui/star.png', alt: '' }), String(stickerTotal()));
 
     var logo = h('h1', { class: 'logo', 'aria-label': 'Word Wizard' });
-    var colors = ['#FF5C8A', '#FF8A00', '#FFC928', '#22C55E', '#2F7BFF', '#9B5DE5'];
+    var colors = ['#FFC928', '#B07CFF', '#FFD84A', '#9B5DE5']; // wizard gold and purple
     'Word Wizard'.split('').forEach(function (ch, i) {
       if (ch === ' ') { logo.appendChild(h('span', { class: 'gap' })); return; }
       logo.appendChild(h('span', { text: ch, style: 'color:' + colors[i % colors.length] + ';animation-delay:' + (i * 0.12) + 's', 'aria-hidden': 'true' }));
@@ -532,7 +529,7 @@
     var modes = h('nav', { class: 'modes' },
       modeBtn('picture', 'Words', '#2F7BFF', function () { go('words'); }),
       modeBtn('search', 'Real things', '#FF8A00', function () { go('real'); }),
-      modeBtn('star', 'Stickers', '#FF5C8A', function () { go('stickers'); })
+      modeBtn('chest', 'Stickers', '#FF5C8A', function () { go('stickers'); })
     );
 
     app.appendChild(h('div', { class: 'home' },
@@ -599,7 +596,6 @@
         tips.length ? h('div', { class: 'install-tip' }, h('b', { text: 'Tip: ' }), tips[0], ' ', h('button', {
           class: 'link-btn', onclick: function () { session = null; go('parent', 'words'); }
         }, 'Grown-ups > Words')) : null,
-        h('p', { class: 'p-muted', text: SUPPORT_NOTE }),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn white', onclick: function () { session = null; go('home'); } }, 'Not now'),
           ready))));
@@ -1716,7 +1712,7 @@
         h('li', { html: '<b>Keep progress safe:</b> use the Home Screen app, and save a backup now and then (Settings tab).' }))));
 
     body.appendChild(pCard('Please note',
-      h('p', { text: SUPPORT_NOTE + ' If you have concerns about ' + CHILD + '\'s speech or language, talk with your pediatrician or a speech-language pathologist, and share the progress report with them.' }),
+      h('p', { text: 'If you have concerns about ' + CHILD + '\'s speech or language, talk with your pediatrician or a speech-language pathologist, and share the progress report with them.' }),
       h('p', { class: 'p-muted', text: 'Everything stays on this device. No accounts, no ads, no tracking.' })));
 
     body.appendChild(pCard('Credits',

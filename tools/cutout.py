@@ -4,7 +4,7 @@ Cut a cartoon character out of a plain white background and save it as a
 transparent PNG, trimmed and sized for the app:
 
     pip install pillow
-    python3 tools/cutout.py IN.png img/ui/wizard.png [HEIGHT]
+    python3 tools/cutout.py IN.png img/ui/wizard.png [HEIGHT]   (HEIGHT 0 keeps the size)
 
 The white is removed by flooding in from the edges, so white inside the
 character (eyes, teeth, beard) is kept. Edges get a 1 px soft fade.
@@ -59,8 +59,9 @@ def cutout(src, dst, height):
 
     box = alpha.getbbox()
     im = im.crop((max(0, box[0] - PAD), max(0, box[1] - PAD), min(w, box[2] + PAD), min(h, box[3] + PAD)))
-    scale = height / im.height
-    im = im.resize((max(1, round(im.width * scale)), height), Image.LANCZOS)
+    if height > 0:
+        scale = height / im.height
+        im = im.resize((max(1, round(im.width * scale)), height), Image.LANCZOS)
     im.save(dst, 'PNG', optimize=True)
     print('%s: %dx%d, %.0f KB' % (dst, im.width, im.height, __import__('os').path.getsize(dst) / 1024))
 

@@ -4,6 +4,7 @@ A bright **listening game** made for **Anthony**, a toddler (around 30 months) w
 
 - **Every line is a warm recorded voice** (made with ElevenLabs), with cheers that use Anthony's name: "Great job, Anthony!", "High five, Anthony!"
 - **Real photos** of every word: three similar ones to learn from, and one that looks different to check the word has really stuck.
+- **A cartoon castle world**: a fairytale castle on green hills under a sparkly sky, with a spellbook, crystal ball and treasure chest for the menu, all drawn in the wizard's style.
 - It installs on an **iPhone** like an app: full screen, its own Home Screen icon, and it works offline.
 
 ![Word Wizard screens](docs/preview.png)
@@ -72,8 +73,6 @@ Everything stays on the phone: no accounts, no ads, no tracking.
 
 The list draws on first-word research (MacArthur-Bates CDI and Wordbank). Words are introduced familiar-first (see `START_ORDER` in `js/words.js`).
 
-> Word Wizard supports, but doesn't replace, speech therapy. If you have concerns about Anthony's speech or language, talk with your pediatrician or a speech-language pathologist.
-
 ## For developers
 
 Plain HTML, CSS and JavaScript with no build step and no dependencies.
@@ -111,6 +110,6 @@ npm run icons    # re-render the app icons from the wizard (needs Playwright)
 ## Credits
 
 - Voice and word photos: made with [ElevenLabs](https://elevenlabs.io).
-- Stickers and icons: [Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT License (`img/LICENSE-fluent-emoji.txt`).
+- Stickers and the speaker icon: [Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT License (`img/LICENSE-fluent-emoji.txt`).
 - Font: [Fredoka](https://github.com/hafontia/Fredoka-One), SIL Open Font License (`fonts/OFL.txt`).
-- The wizard: made with ElevenLabs image generation and chosen by Anthony's family; the app icons are rendered from it (`tools/make-icons.js`). Sound effects are synthesized in code.
+- The wizard, the castle and the menu icons: made with ElevenLabs image generation (the wizard was chosen by Anthony's family) and cut out of their white backgrounds with `tools/cutout.py`; the app icons are rendered from the wizard (`tools/make-icons.js`). Sound effects are synthesized in code.
