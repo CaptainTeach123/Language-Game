@@ -218,8 +218,8 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 .mascot.talking .wiz-smile { opacity: 0; }
 .mascot.talking .wiz-mouth { opacity: 1; animation: talk 0.22s ease-in-out infinite alternate; }
 .wiz-arm-l, .wiz-arm-r { transform-box: view-box; }
-.wiz-arm-l { transform-origin: 80px 146px; }  /* the shoulders, in the wizard's own coordinates */
-.wiz-arm-r { transform-origin: 120px 146px; }
+.wiz-arm-l { transform-origin: 82px 142px; }  /* the shoulders, in the wizard's own coordinates */
+.wiz-arm-r { transform-origin: 118px 142px; }
 .mascot.waving .wiz-arm-r { animation: arm-wave 0.5s ease-in-out 4 alternate; }
 .mascot.happy .wiz-bob { animation: jump 0.5s ease-out 2; }
 .mascot.happy .wiz-arm-l { animation: arm-up-l 0.5s ease-out 2; }
