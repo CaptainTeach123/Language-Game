@@ -1,7 +1,7 @@
 {
-  "name": "Word Buddies",
-  "short_name": "Word Buddies",
-  "description": "A bright, talking picture game that helps toddlers with speech delay learn their first 50 words.",
+  "name": "Word Wizard",
+  "short_name": "Word Wizard",
+  "description": "A bright, talking picture game that helps Anthony learn his first 50 words by listening.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

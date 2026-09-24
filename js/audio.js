@@ -1,8 +1,7 @@
 /*
- * Word Buddies: everything that makes sound.
- *   Speech  - text-to-speech plus grown-up voice recordings, played in order
+ * Word Wizard: everything that makes sound.
+ *   Speech  - the voice: bundled ElevenLabs clips, played in order
  *   Sfx     - cheerful sound effects made with Web Audio (no sound files)
- *   Rec     - record a grown-up saying a word
  *
  * iPhone notes: Safari only allows sound after the first tap, so unlock()
  * runs on the first touch. Web Audio follows the ring/silent switch unless
@@ -41,131 +40,60 @@
       s.connect(c.destination);
       s.start(0);
     }
-    if (root.speechSynthesis) {
-      // A silent utterance inside the tap lets later speech play on iOS.
-      var u = new root.SpeechSynthesisUtterance(' ');
-      u.volume = 0;
-      root.speechSynthesis.speak(u);
-    }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Speech                                                              */
+  /* Speech: bundled voice clips                                         */
   /* ------------------------------------------------------------------ */
 
-  var NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|ralph|kathy|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley/i;
-
-  function voiceScore(v) {
-    var s = 0;
-    var lang = (v.lang || '').replace('_', '-').toLowerCase();
-    if (lang.indexOf('en') !== 0) return -1;
-    if (lang === 'en-us') s += 10; else s += 5;
-    if (NOVELTY.test(v.name)) s -= 40;
-    if (/premium|enhanced|natural|neural/i.test(v.name)) s += 40;
-    if (/samantha|ava|allison|susan|nicky|zoe|karen|moira|tessa|serena|joelle|evan|nathan/i.test(v.name)) s += 20;
-    if (/google us english/i.test(v.name)) s += 15;
-    if (/aria|jenny|michelle|ana/i.test(v.name) && /microsoft/i.test(v.name)) s += 25;
-    if (v.localService) s += 2;
-    return s;
-  }
-
+  // Every spoken line is a small MP3 recorded with ElevenLabs (see tools/voice/),
+  // e.g. audio/ball-where.mp3 ("Where's the ball?"). Clips are decoded once and kept.
   var Speech = {
-    rate: 0.8,
-    pitch: 1.1,
-    voiceURI: '',
-    voice: null,
+    base: 'audio/',
     onTalk: null,
     token: 0,
     buffers: {},
+    loading: {},
     source: null,
-    alive: [],
-
-    supported: function () { return !!root.speechSynthesis; },
-
-    voices: function () {
-      if (!root.speechSynthesis) return [];
-      return root.speechSynthesis.getVoices()
-        .filter(function (v) { return voiceScore(v) >= 0; })
-        .sort(function (a, b) { return voiceScore(b) - voiceScore(a) || a.name.localeCompare(b.name); });
-    },
-
-    pickVoice: function () {
-      var list = this.voices();
-      var chosen = null;
-      var uri = this.voiceURI;
-      if (uri) list.forEach(function (v) { if (v.voiceURI === uri) chosen = v; });
-      this.voice = chosen || list[0] || null;
-      return this.voice;
-    },
-
-    init: function () {
-      var self = this;
-      if (!root.speechSynthesis) return;
-      self.pickVoice();
-      if ('onvoiceschanged' in root.speechSynthesis) {
-        root.speechSynthesis.onvoiceschanged = function () { self.pickVoice(); };
-      }
-    },
+    element: null,
 
     talk: function (on) {
       if (this.onTalk) this.onTalk(on);
     },
 
+    // Fetch and decode clips ahead of time so there's no gap before a prompt.
+    load: function (name) {
+      var self = this;
+      if (self.buffers[name]) return Promise.resolve(self.buffers[name]);
+      if (self.loading[name]) return self.loading[name];
+      var c = audioCtx();
+      if (!c || !root.fetch) return Promise.resolve(null);
+      var p = root.fetch(self.base + name + '.mp3')
+        .then(function (r) { if (!r.ok) throw new Error(name); return r.arrayBuffer(); })
+        .then(function (data) {
+          return new Promise(function (resolve, reject) {
+            // Older Safari only has the callback form of decodeAudioData.
+            var q = c.decodeAudioData(data, resolve, reject);
+            if (q && q.then) q.then(resolve, reject);
+          });
+        })
+        .then(function (buf) { self.buffers[name] = buf; return buf; })
+        .catch(function () { return null; })
+        .then(function (buf) { delete self.loading[name]; return buf; });
+      self.loading[name] = p;
+      return p;
+    },
+
+    preload: function (names) {
+      var self = this;
+      return Promise.all(names.map(function (n) { return self.load(n); }));
+    },
+
     stop: function () {
       this.token += 1;
-      var ss = root.speechSynthesis;
-      // Only cancel when needed: cancel() right before speak() can drop speech on some browsers.
-      if (ss && (ss.speaking || ss.pending)) ss.cancel();
       if (this.source) { try { this.source.stop(); } catch (e) { /* ignore */ } this.source = null; }
       this.talk(false);
     },
-
-    speakText: function (text, opts) {
-      var self = this;
-      opts = opts || {};
-      return new Promise(function (resolve) {
-        if (!root.speechSynthesis || !text) { resolve(); return; }
-        if (!self.voice) self.pickVoice();
-        var u = new root.SpeechSynthesisUtterance(text);
-        if (self.voice) { u.voice = self.voice; u.lang = self.voice.lang; } else u.lang = 'en-US';
-        u.rate = Math.max(0.5, Math.min(1.3, (opts.rate || 1) * self.rate));
-        u.pitch = opts.pitch || self.pitch;
-        var done = false;
-        var finish = function () {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          self.alive = self.alive.filter(function (x) { return x !== u; });
-          self.talk(false);
-          resolve();
-        };
-        // Some browsers never fire onend; don't let the game get stuck.
-        var timer = setTimeout(finish, 1800 + text.length * 120 / u.rate);
-        u.onstart = function () { self.talk(true); };
-        u.onend = finish;
-        u.onerror = finish;
-        self.alive.push(u); // keep a reference so it isn't garbage collected mid-sentence
-        root.speechSynthesis.speak(u);
-      });
-    },
-
-    loadRecording: function (id) {
-      var self = this;
-      if (self.buffers[id]) return Promise.resolve(self.buffers[id]);
-      var c = audioCtx();
-      if (!c || !root.WB_STORE) return Promise.resolve(null);
-      return root.WB_STORE.getMedia('rec:' + id).then(function (rec) {
-        if (!rec) return null;
-        return new Promise(function (resolve) {
-          c.decodeAudioData(rec.data.slice(0), function (buf) {
-            self.buffers[id] = buf;
-            resolve(buf);
-          }, function () { resolve(null); });
-        });
-      });
-    },
-
-    forgetRecording: function (id) { delete this.buffers[id]; },
 
     playBuffer: function (buf) {
       var self = this;
@@ -174,11 +102,8 @@
         if (!c || !buf) { resolve(); return; }
         if (c.state !== 'running') c.resume();
         var s = c.createBufferSource();
-        var g = c.createGain();
-        g.gain.value = 1.4;
         s.buffer = buf;
-        s.connect(g);
-        g.connect(c.destination);
+        s.connect(c.destination);
         self.source = s;
         self.talk(true);
         var finished = false;
@@ -190,6 +115,7 @@
           resolve();
         };
         s.onended = end;
+        // Don't let the game wait forever if onended never fires.
         setTimeout(end, buf.duration * 1000 + 400);
         s.start(0);
       });
@@ -197,12 +123,10 @@
 
     /*
      * Say a list of parts in order. A part is:
-     *   'text'                          spoken with text-to-speech
-     *   { text, rate }                  spoken slower/faster
-     *   { word: id, text, useRec }      a grown-up recording if there is one, else text
+     *   'ball-where'     a clip name (audio/ball-where.mp3)
      *   { pause: ms }
-     *   { run: fn }                     call fn right now (to sync an animation)
-     * Returns a promise that resolves when done (or when stop() is called).
+     *   { run: fn }      call fn right now (to sync an animation)
+     * Resolves true when finished, false if stop() or another say() cut it short.
      */
     say: function (parts) {
       var self = this;
@@ -213,15 +137,10 @@
         if (my !== self.token || i >= parts.length) return Promise.resolve(my === self.token);
         var p = parts[i++];
         var step;
-        if (typeof p === 'string') step = self.speakText(p);
-        else if (p.run) { p.run(); step = Promise.resolve(); }
-        else if (p.pause) step = new Promise(function (r) { setTimeout(r, p.pause); });
-        else if (p.word && p.useRec) {
-          step = self.loadRecording(p.word).then(function (buf) {
-            if (my !== self.token) return null;
-            return buf ? self.playBuffer(buf) : self.speakText(p.text, p);
-          });
-        } else step = self.speakText(p.text, p);
+        if (typeof p === 'string') {
+          step = self.load(p).then(function (buf) { return my === self.token ? self.playBuffer(buf) : null; });
+        } else if (p.run) { p.run(); step = Promise.resolve(); }
+        else step = new Promise(function (r) { setTimeout(r, p.pause || 0); });
         return step.then(next);
       };
       return next();
@@ -303,56 +222,5 @@
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /* Record a grown-up's voice                                           */
-  /* ------------------------------------------------------------------ */
-
-  var Rec = {
-    recorder: null,
-    stream: null,
-
-    supported: function () {
-      return !!(root.MediaRecorder && root.navigator.mediaDevices && root.navigator.mediaDevices.getUserMedia);
-    },
-
-    mimeType: function () {
-      var types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
-      for (var i = 0; i < types.length; i++) {
-        if (root.MediaRecorder.isTypeSupported && root.MediaRecorder.isTypeSupported(types[i])) return types[i];
-      }
-      return '';
-    },
-
-    // Resolves with a Blob when recording stops (after maxMs or stop()).
-    start: function (maxMs) {
-      var self = this;
-      setSession('play-and-record');
-      return root.navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
-        .then(function (stream) {
-          self.stream = stream;
-          var type = self.mimeType();
-          var rec = type ? new root.MediaRecorder(stream, { mimeType: type }) : new root.MediaRecorder(stream);
-          self.recorder = rec;
-          var chunks = [];
-          return new Promise(function (resolve) {
-            rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
-            rec.onstop = function () {
-              stream.getTracks().forEach(function (t) { t.stop(); });
-              self.recorder = null;
-              self.stream = null;
-              setSession('playback');
-              resolve(new Blob(chunks, { type: rec.mimeType || type || 'audio/mp4' }));
-            };
-            rec.start();
-            setTimeout(function () { if (rec.state === 'recording') rec.stop(); }, maxMs || 3000);
-          });
-        });
-    },
-
-    stop: function () {
-      if (this.recorder && this.recorder.state === 'recording') this.recorder.stop();
-    }
-  };
-
-  root.WB_AUDIO = { unlock: unlock, audioCtx: audioCtx, Speech: Speech, Sfx: Sfx, Rec: Rec };
+  root.WB_AUDIO = { unlock: unlock, audioCtx: audioCtx, Speech: Speech, Sfx: Sfx };
 })(this);

@@ -1,36 +1,44 @@
 /*
- * Word Buddies: mastery engine (receptive language).
+ * Word Wizard: learning engine for "hear the word, tap the picture".
  *
- * The child hears a word and picks its picture. Only the FIRST tap in a
- * round counts, so hints never inflate progress. Every word earns stars:
- *   1. Picks from 2:    right on the first try at least twice.
- *   2. Picks from 3-4:  right on the first try at least twice when there
- *                       were 3 or 4 pictures to choose from.
- *   3. Mastered:        right with 3+ pictures on 3 different days, AND
- *                       4 of the last 5 tries right (80%).
- * The number of pictures grows as the child gets a word right, so a lucky
- * guess can't earn mastery. Mastered words leave the "learning now" set
- * and come back for a quick check after 1, 3, 7, 14 and 30 days. If a
- * mastered word starts getting missed, it goes back to "learning now".
+ * Built on the design guidelines in the research brief (receptive picture
+ * identification for toddlers with language delay):
  *
- * Everything in here is plain data in, plain data out, so it can be unit
- * tested in Node (see tests/).
+ * Each word moves New -> Learning -> Review -> Mastered.
+ *   Learning has three levels, which set how many pictures are shown:
+ *     level 1: 2 pictures (target + an unrelated, already-known picture when possible)
+ *     level 2: 3 pictures
+ *     level 3: 4 pictures, including other words still being learned, so the
+ *              child can't win just by ruling out pictures they already know
+ *   Level 1 -> 2 as soon as the child is right twice in a row (2 pictures is a
+ *   50% guess, so we move on quickly). Level 2 -> 3 at 80% correct across the
+ *   word's last 2 sessions. A level drops back after 2 sessions below 50%.
+ *   Learning -> Review at 80% across 2 level-3 sessions on different days.
+ *   Review -> Mastered after it is right again 2 days later, then 7 days
+ *   later, each time with a picture the child hasn't been tested on.
+ *   A reviewed or mastered word missed twice in a row goes back to Learning.
+ * Only UNPROMPTED first taps count as correct. If the child needed a hint,
+ * the trial is logged as "prompted", which doesn't count toward progress.
+ * Sessions are about 60% learning words, 30% review, 10% mastered, and new
+ * words join 1-2 at a time, only while few words are being learned.
+ *
+ * Plain data in, plain data out, so it is unit tested in Node (tests/).
  */
 (function (root) {
   'use strict';
 
-  var RECENT_SIZE = 5;
-  var MASTER_DAYS = 3;
-  var MASTER_ACC = 0.8;
-  var REVIEW_DAYS = [1, 3, 7, 14, 30];
   var DAY_MS = 24 * 60 * 60 * 1000;
+  var ADVANCE = 0.8;
+  var DROP = 0.5;
+  var REVIEW_GAPS = [2, 7];        // days until each review check
+  var MAINT_GAPS = [14, 30, 60];   // days between checks once mastered
+  var HIST_MAX = 12;
+  var MAX_LEVEL = 3;
 
   var DEFAULT_SETTINGS = {
-    childName: '',
-    activeSize: 5,       // words learned at the same time
-    sessionRounds: 10,   // rounds in one "Play" session
-    rate: 0.8,           // speaking speed (1 = normal)
-    voiceURI: '',
+    learningCap: 6,      // most words in Learning at once (new words wait)
+    sessionTrials: 10,   // pictures to find per session (10-20 suggested)
+    maxMinutes: 10,      // a session always stops after this long
     sfx: true,
     welcomed: false
   };
@@ -45,78 +53,129 @@
   function dayDiff(fromKey, toKey) {
     var a = fromKey.split('-').map(Number);
     var b = toKey.split('-').map(Number);
-    var ta = Date.UTC(a[0], a[1] - 1, a[2]);
-    var tb = Date.UTC(b[0], b[1] - 1, b[2]);
-    return Math.round((tb - ta) / DAY_MS);
+    return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / DAY_MS);
   }
+
+  function addDays(key, n) {
+    var a = key.split('-').map(Number);
+    return dayKey(new Date(a[0], a[1] - 1, a[2] + n, 12).getTime());
+  }
+
+  function fieldSize(level) { return Math.min(MAX_LEVEL, Math.max(1, level)) + 1; }
 
   function createState(now) {
     return {
-      version: 2,
+      version: 3,
       created: now || Date.now(),
       settings: Object.assign({}, DEFAULT_SETTINGS),
       words: {},
-      focus: [],
       paused: [],
       custom: {},
       stickers: {},
-      days: {}
+      days: {},
+      sessionCount: 0
     };
-  }
-
-  // Fill in anything missing from an older or partial save.
-  function normalizeState(raw, now) {
-    var s = createState(now);
-    if (!raw || typeof raw !== 'object') return s;
-    s.created = raw.created || s.created;
-    var settings = Object.assign({}, DEFAULT_SETTINGS);
-    var rs = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
-    Object.keys(DEFAULT_SETTINGS).forEach(function (k) { if (k in rs) settings[k] = rs[k]; });
-    s.settings = settings;
-    s.focus = Array.isArray(raw.focus) ? raw.focus.slice() : [];
-    s.paused = Array.isArray(raw.paused) ? raw.paused.slice() : [];
-    s.custom = raw.custom && typeof raw.custom === 'object' ? raw.custom : {};
-    s.stickers = raw.stickers && typeof raw.stickers === 'object' ? raw.stickers : {};
-    s.days = raw.days && typeof raw.days === 'object' ? raw.days : {};
-    var words = raw.words && typeof raw.words === 'object' ? raw.words : {};
-    Object.keys(words).forEach(function (id) { s.words[id] = normalizeStat(words[id]); });
-    return s;
   }
 
   function newStat() {
     return {
-      seen: 0,          // times heard in Learn rounds or the picture book
-      findTries: 0,     // Find it rounds (first taps)
-      findOk: 0,        // right on the first try
-      recent: [],       // last 5 first taps, 1 = right
-      wins2: 0,         // right first try with 2 pictures
-      wins3: 0,         // right first try with 3 or 4 pictures
-      winDays: [],      // days with a first-try win among 3+ pictures
-      last: 0,
+      state: 'new',      // new | learning | review | mastered
+      level: 1,          // learning level: 1, 2, 3 -> 2, 3, 4 pictures
+      introduced: '',
+      masteredOn: '',
+      seen: 0,           // named with one picture (intro, picture book, real things)
+      trials: 0,         // find-the-picture trials (each counted once)
+      correct: 0,        // right on the first tap, no hint
+      errors: 0,         // wrong first tap
+      prompted: 0,       // no tap until the hint
+      corrections: 0,    // right on the do-over after a miss (not counted as correct)
+      run: 0,            // correct in a row
+      missRun: 0,        // missed in a row
+      hist: [],          // per session: { s: session id, d: day, l: level, n: trials, ok: correct }
       reviewStep: 0,
-      lastReviewDay: '',
-      known: false      // a grown-up says the child already understands it
+      due: '',           // day the next review or maintenance check is due
+      exSeen: [],        // pictures this word has been tested with
+      lastEx: '',
+      last: 0,
+      known: false       // a grown-up says the child already understands it
     };
   }
 
   var STAT_KEYS = Object.keys(newStat());
+  var NUM_KEYS = ['level', 'seen', 'trials', 'correct', 'errors', 'prompted', 'corrections', 'run', 'missRun', 'reviewStep', 'last'];
 
-  function normalizeStat(raw) {
+  function recentAcc(recent) {
+    if (!recent || !recent.length) return 0;
+    return recent.reduce(function (a, b) { return a + (b ? 1 : 0); }, 0) / recent.length;
+  }
+
+  // Bring a saved word record up to date (including saves from older versions).
+  function normalizeStat(raw, today) {
     raw = raw && typeof raw === 'object' ? raw : {};
     var st = newStat();
-    STAT_KEYS.forEach(function (k) { if (k in raw) st[k] = raw[k]; });
-    // Saves from the first version kept "findDays" (same meaning as winDays).
-    if (!('winDays' in raw) && Array.isArray(raw.findDays)) {
-      st.winDays = raw.findDays.slice();
-      st.wins3 = raw.findDays.length;
-      st.wins2 = Math.max(0, (raw.findOk | 0) - st.wins3);
+    if (typeof raw.state === 'string') {
+      STAT_KEYS.forEach(function (k) { if (k in raw) st[k] = raw[k]; });
+    } else {
+      // Version 1-2 kept star counters instead of stages.
+      st.seen = raw.seen | 0;
+      st.trials = raw.findTries | 0;
+      st.correct = raw.findOk | 0;
+      st.errors = Math.max(0, st.trials - st.correct);
+      st.last = raw.last || 0;
+      st.known = !!raw.known;
+      var days = Array.isArray(raw.winDays) ? raw.winDays : (Array.isArray(raw.findDays) ? raw.findDays : []);
+      var acc = recentAcc(raw.recent);
+      if (st.known) st.state = 'mastered';
+      else if (days.length >= 2 && acc >= 0.75) { st.state = 'review'; st.due = today; }
+      else if (st.trials > 0 || st.seen > 0) {
+        st.state = 'learning';
+        st.level = acc >= 0.75 ? 3 : (acc >= 0.5 ? 2 : 1);
+      }
+      if (st.state !== 'new') st.introduced = st.last ? dayKey(st.last) : today;
     }
-    ['recent', 'winDays'].forEach(function (k) { if (!Array.isArray(st[k])) st[k] = []; });
-    ['seen', 'findTries', 'findOk', 'wins2', 'wins3', 'last', 'reviewStep'].forEach(function (k) {
-      st[k] = Number(st[k]) || 0;
-    });
+    if (['new', 'learning', 'review', 'mastered'].indexOf(st.state) === -1) st.state = 'new';
+    NUM_KEYS.forEach(function (k) { st[k] = Number(st[k]) || 0; });
+    st.level = Math.min(MAX_LEVEL, Math.max(1, st.level));
+    ['hist', 'exSeen'].forEach(function (k) { if (!Array.isArray(st[k])) st[k] = []; });
+    ['introduced', 'masteredOn', 'due', 'lastEx'].forEach(function (k) { if (typeof st[k] !== 'string') st[k] = ''; });
     st.known = !!st.known;
     return st;
+  }
+
+  function normalizeState(raw, now) {
+    now = now || Date.now();
+    var today = dayKey(now);
+    var s = createState(now);
+    if (!raw || typeof raw !== 'object') return s;
+    s.created = raw.created || s.created;
+    var rs = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
+    Object.keys(DEFAULT_SETTINGS).forEach(function (k) { if (k in rs) s.settings[k] = rs[k]; });
+    s.paused = Array.isArray(raw.paused) ? raw.paused.slice() : [];
+    s.custom = raw.custom && typeof raw.custom === 'object' ? raw.custom : {};
+    s.stickers = raw.stickers && typeof raw.stickers === 'object' ? raw.stickers : {};
+    s.sessionCount = raw.sessionCount | 0;
+    var days = raw.days && typeof raw.days === 'object' ? raw.days : {};
+    Object.keys(days).forEach(function (k) {
+      var d = days[k] || {};
+      s.days[k] = {
+        trials: (d.trials != null ? d.trials : d.rounds) | 0,
+        correct: d.correct | 0,
+        heard: d.heard | 0,
+        sessions: d.sessions | 0,
+        seconds: d.seconds | 0
+      };
+      if (!raw.sessionCount) s.sessionCount += d.sessions | 0;
+    });
+    var words = raw.words && typeof raw.words === 'object' ? raw.words : {};
+    Object.keys(words).forEach(function (id) { s.words[id] = normalizeStat(words[id], today); });
+    // Version 2 kept a "learning now" list; carry it over.
+    if (Array.isArray(raw.focus)) {
+      raw.focus.forEach(function (id) {
+        var st = s.words[id] || (s.words[id] = newStat());
+        if (st.state === 'new') { st.state = 'learning'; st.introduced = today; }
+      });
+    }
+    return s;
   }
 
   function stat(state, id) {
@@ -128,57 +187,62 @@
     return state.words[id] || newStat();
   }
 
-  function addDay(list, key) {
-    if (list.indexOf(key) === -1) list.push(key);
-  }
+  function stateOf(state, id) { return peek(state, id).state; }
+  function isPaused(state, id) { return state.paused.indexOf(id) !== -1; }
 
   function dayLog(state, now) {
     var key = dayKey(now);
-    if (!state.days[key]) state.days[key] = { rounds: 0, correct: 0, heard: 0, sessions: 0, seconds: 0 };
+    if (!state.days[key]) state.days[key] = { trials: 0, correct: 0, heard: 0, sessions: 0, seconds: 0 };
     return state.days[key];
   }
 
-  function recentAcc(st) {
-    if (!st.recent.length) return 0;
-    var ok = 0;
-    st.recent.forEach(function (r) { ok += r ? 1 : 0; });
-    return ok / st.recent.length;
+  function introduce(state, id, now) {
+    var st = stat(state, id);
+    state.paused = state.paused.filter(function (p) { return p !== id; });
+    if (st.state === 'new') {
+      st.state = 'learning';
+      st.level = 1;
+      st.introduced = dayKey(now);
+    }
+    return st;
   }
 
-  function level(st) {
-    st = st || newStat();
-    var known = !!st.known;
-    var mastered = known ||
-      (st.winDays.length >= MASTER_DAYS && st.recent.length >= 4 && recentAcc(st) >= MASTER_ACC);
-    var fromMany = known || mastered || st.wins3 >= 2;
-    var fromTwo = fromMany || st.wins2 + st.wins3 >= 2;
-    var stage;
-    if (mastered) stage = 'mastered';
-    else if (fromTwo) stage = 'learning';
-    else if (st.seen > 0 || st.findTries > 0) stage = 'started';
-    else stage = 'new';
-    return {
-      fromTwo: fromTwo,
-      fromMany: fromMany,
-      mastered: mastered,
-      stars: (fromTwo ? 1 : 0) + (fromMany ? 1 : 0) + (mastered ? 1 : 0),
-      stage: stage
-    };
+  function pause(state, id) {
+    if (state.paused.indexOf(id) === -1) state.paused.push(id);
   }
 
-  function isMastered(state, id) {
-    return level(peek(state, id)).mastered;
+  function unpause(state, id) {
+    state.paused = state.paused.filter(function (p) { return p !== id; });
   }
 
-  // How many pictures to show in "Find it": start with 2, add more as the
-  // child gets the word right, drop back to 2 if it gets hard.
-  function choiceCount(st) {
-    st = st || newStat();
-    if (st.recent.length < 2) return 2;
-    var acc = recentAcc(st);
-    if (acc >= 0.75) return 4;
-    if (acc >= 0.5) return 3;
-    return 2;
+  function setKnown(state, id, known, now) {
+    var st = stat(state, id);
+    var today = dayKey(now);
+    st.known = !!known;
+    if (known) {
+      st.state = 'mastered';
+      st.masteredOn = st.masteredOn || today;
+      st.reviewStep = 0;
+      st.due = addDays(today, MAINT_GAPS[0]);
+      st.missRun = 0;
+    } else if (st.state === 'mastered') {
+      st.state = st.trials || st.seen ? 'learning' : 'new';
+      st.masteredOn = '';
+      st.due = '';
+      if (st.state === 'learning' && !st.introduced) st.introduced = today;
+    }
+    return st;
+  }
+
+  function demote(st, level) {
+    st.state = 'learning';
+    st.level = level;
+    st.reviewStep = 0;
+    st.due = '';
+    st.masteredOn = '';
+    st.known = false;
+    st.run = 0;
+    st.missRun = 0;
   }
 
   function recordExposure(state, id, now) {
@@ -189,80 +253,114 @@
     return st;
   }
 
-  function afterReview(st, success, now) {
-    // Only counts once per day, and only for words that were already mastered.
-    var key = dayKey(now);
-    if (st.lastReviewDay === key) return;
-    st.lastReviewDay = key;
-    if (success) st.reviewStep = Math.min(st.reviewStep + 1, REVIEW_DAYS.length - 1);
-    else st.reviewStep = Math.max(st.reviewStep - 1, 0);
-  }
-
-  // Only the child's FIRST tap in a "Find it" round is recorded.
-  function recordFind(state, id, correct, choices, now) {
+  /*
+   * One find-the-picture trial.
+   *   outcome: 'correct' (first tap, no hint) | 'error' (wrong first tap) | 'prompted' (needed the hint)
+   *   info: { session, exemplar }
+   */
+  function recordTrial(state, id, outcome, info, now) {
+    info = info || {};
     var st = stat(state, id);
-    var wasMastered = level(st).mastered;
-    st.findTries += 1;
-    st.recent.push(correct ? 1 : 0);
-    if (st.recent.length > RECENT_SIZE) st.recent.shift();
-    if (correct) {
-      st.findOk += 1;
-      if (choices >= 3) {
-        st.wins3 += 1;
-        addDay(st.winDays, dayKey(now));
+    var today = dayKey(now);
+    var ok = outcome === 'correct';
+    if (st.state === 'new') introduce(state, id, now);
+
+    st.trials += 1;
+    if (ok) { st.correct += 1; st.run += 1; st.missRun = 0; }
+    else { st.run = 0; st.missRun += 1; }
+    if (outcome === 'error') st.errors += 1;
+    if (outcome === 'prompted') st.prompted += 1;
+    st.last = now;
+    if (info.exemplar && st.exSeen.indexOf(info.exemplar) === -1) st.exSeen.push(info.exemplar);
+
+    var log = dayLog(state, now);
+    log.trials += 1;
+    if (ok) log.correct += 1;
+
+    if (st.state === 'learning') {
+      var h = null;
+      st.hist.forEach(function (x) { if (x.s === info.session && x.l === st.level) h = x; });
+      if (!h) {
+        h = { s: info.session || 0, d: today, l: st.level, n: 0, ok: 0 };
+        st.hist.push(h);
+        if (st.hist.length > HIST_MAX) st.hist.shift();
+      }
+      h.n += 1;
+      if (ok) h.ok += 1;
+      // Two pictures is a coin flip, so move on quickly.
+      if (st.level === 1 && st.run >= 2) { st.level = 2; st.run = 0; }
+    } else if (st.state === 'review') {
+      if (ok) {
+        st.reviewStep += 1;
+        st.lastEx = info.exemplar || '';
+        if (st.reviewStep >= REVIEW_GAPS.length) {
+          st.state = 'mastered';
+          st.masteredOn = today;
+          st.reviewStep = 0;
+          st.due = addDays(today, MAINT_GAPS[0]);
+        } else {
+          st.due = addDays(today, REVIEW_GAPS[st.reviewStep]);
+        }
+      } else if (st.missRun >= 2) {
+        demote(st, MAX_LEVEL);
       } else {
-        st.wins2 += 1;
+        st.due = addDays(today, 1);
+      }
+    } else if (st.state === 'mastered') {
+      if (ok) {
+        st.reviewStep = Math.min(st.reviewStep + 1, MAINT_GAPS.length - 1);
+        st.due = addDays(today, MAINT_GAPS[st.reviewStep]);
+        st.lastEx = info.exemplar || '';
+      } else if (st.missRun >= 2) {
+        demote(st, 2);
+      } else {
+        st.due = addDays(today, 1);
       }
     }
-    st.last = now;
-    if (wasMastered) afterReview(st, correct, now);
-    var log = dayLog(state, now);
-    log.rounds += 1;
-    if (correct) log.correct += 1;
     return st;
   }
 
-  function setKnown(state, id, known) {
-    var st = stat(state, id);
-    st.known = !!known;
-    return st;
+  // The do-over after a miss. It shows the child the answer, so it never
+  // counts as correct; we only keep a tally for grown-ups.
+  function recordCorrection(state, id, ok) {
+    if (ok) stat(state, id).corrections += 1;
   }
 
-  function isDue(st, now) {
-    if (!st.last) return true;
-    var wait = REVIEW_DAYS[Math.min(st.reviewStep, REVIEW_DAYS.length - 1)];
-    return dayDiff(dayKey(st.last), dayKey(now)) >= wait;
-  }
-
-  // Keep the "learning now" set topped up: drop mastered words and add the
-  // next ones from the introduction order (skipping words a grown-up paused).
-  function refreshFocus(state, order) {
-    var valid = {};
-    order.forEach(function (id) { valid[id] = true; });
-    var focus = [];
-    state.focus.forEach(function (id) {
-      if (valid[id] && focus.indexOf(id) === -1 && !isMastered(state, id)) focus.push(id);
-    });
-    var size = Math.max(1, state.settings.activeSize | 0);
-    for (var i = 0; i < order.length && focus.length < size; i++) {
-      var id = order[i];
-      if (focus.indexOf(id) !== -1) continue;
-      if (state.paused.indexOf(id) !== -1) continue;
-      if (isMastered(state, id)) continue;
-      focus.push(id);
+  // After each session: move learning words up or down a level, or on to Review.
+  function applyLevelRules(st, now) {
+    if (st.state !== 'learning') return;
+    var atLevel = st.hist.filter(function (h) { return h.l === st.level && h.n > 0; });
+    var last2 = atLevel.slice(-2);
+    if (last2.length < 2) return;
+    var n = last2[0].n + last2[1].n;
+    var ok = last2[0].ok + last2[1].ok;
+    if (n >= 3 && ok / n >= ADVANCE) {
+      if (st.level < MAX_LEVEL) {
+        st.level += 1;
+        st.run = 0;
+      } else if (last2[0].d !== last2[1].d) {
+        st.state = 'review';
+        st.reviewStep = 0;
+        st.due = addDays(dayKey(now), REVIEW_GAPS[0]);
+        st.lastEx = '';
+        st.missRun = 0;
+      }
+    } else if (st.level > 1 && last2.every(function (h) { return h.ok / h.n < DROP; })) {
+      st.level -= 1;
+      st.run = 0;
     }
-    state.focus = focus;
-    return focus;
   }
 
-  function addFocus(state, id) {
-    state.paused = state.paused.filter(function (p) { return p !== id; });
-    if (state.focus.indexOf(id) === -1) state.focus.unshift(id);
-  }
-
-  function removeFocus(state, id) {
-    state.focus = state.focus.filter(function (f) { return f !== id; });
-    if (state.paused.indexOf(id) === -1) state.paused.push(id);
+  function finishSession(state, sessionId, seconds, now) {
+    Object.keys(state.words).forEach(function (id) {
+      var st = state.words[id];
+      var played = st.hist.some(function (h) { return h.s === sessionId; });
+      if (played) applyLevelRules(st, now);
+    });
+    var log = dayLog(state, now);
+    log.sessions += 1;
+    log.seconds += Math.max(0, Math.round(seconds || 0));
+    state.sessionCount += 1;
   }
 
   function shuffle(list, rng) {
@@ -274,18 +372,7 @@
     return a;
   }
 
-  // Which activities a word gets this session, in order. A new word is
-  // shown and named first ("learn"), then the child finds it.
-  function roundSequence(st) {
-    if (level(st).mastered) return ['find'];
-    if (st.findTries === 0 && st.seen < 2) return ['learn', 'find', 'find'];
-    var lastWrong = st.recent.length && !st.recent[st.recent.length - 1];
-    if (lastWrong) return ['learn', 'find', 'find'];
-    return ['find', 'find', 'learn'];
-  }
-
-  // Reorder so the same word never shows up twice in a row, while keeping
-  // each word's own rounds in order (learn before find).
+  // Same word never twice in a row; each word's own trials keep their order.
   function noBackToBack(list) {
     var rest = list.slice();
     var out = [];
@@ -301,109 +388,160 @@
     return out;
   }
 
+  // Spread `extra` items evenly through `base`.
+  function spread(base, extra) {
+    if (!extra.length) return base.slice();
+    var out = [];
+    var gap = Math.max(1, Math.floor(base.length / (extra.length + 1)));
+    var e = extra.slice();
+    base.forEach(function (b, i) {
+      out.push(b);
+      if (e.length && (i + 1) % gap === 0) out.push(e.shift());
+    });
+    return out.concat(e);
+  }
+
   /*
-   * Build one play session.
-   *   opts.mode   'mix' (default: learn + find) | 'find' (find only) | 'pop' (find, bubble style)
-   *   opts.rounds number of rounds
-   *   opts.rng    random function (for tests)
-   * Returns [{ type: 'learn'|'find', id, style: 'cards'|'bubbles' }]
+   * Plan one session.
+   *   order:  picture word ids in introduction order
+   *   opts.trials     how many trials (default: settings.sessionTrials)
+   *   opts.available  fn(id) -> false for words that can't be played yet ("me" without a photo)
+   *   opts.rng
+   * Introduces 1-2 new words when there is room (this changes state).
+   * Returns { plan: [{ id, type: 'learn'|'find', check: 'intro'|'learning'|'review'|'maint' }], newWords }
    */
   function planSession(state, order, opts, now) {
     opts = opts || {};
     var rng = opts.rng || Math.random;
-    var mode = opts.mode || 'mix';
-    var rounds = Math.max(1, opts.rounds || state.settings.sessionRounds || 10);
-    now = now || Date.now();
+    var available = opts.available || function () { return true; };
+    var N = Math.max(4, opts.trials || state.settings.sessionTrials || 10);
+    var today = dayKey(now);
+    var ids = order.filter(function (id) { return available(id) && !isPaused(state, id); });
+    var by = function (s) { return ids.filter(function (id) { return stateOf(state, id) === s; }); };
 
-    var focus = refreshFocus(state, order).slice();
-    var mastered = order.filter(function (id) { return isMastered(state, id); });
-    var due = mastered.filter(function (id) { return isDue(peek(state, id), now); });
-    due.sort(function (a, b) { return peek(state, a).last - peek(state, b).last; });
-
-    var reviewCount = Math.min(due.length, Math.round(rounds * 0.3));
-    var reviews = due.slice(0, reviewCount);
-    // One easy win to start with, even if nothing is due yet.
-    if (!reviews.length && mastered.length && rounds >= 6) {
-      reviews = [mastered[Math.floor(rng() * mastered.length)]];
-    }
-    if (!focus.length) {
-      // Everything is mastered: keep reviewing all of it.
-      focus = shuffle(mastered.length ? mastered : order, rng).slice(0, 6);
-      reviews = [];
+    var learning = by('learning');
+    var cap = Math.max(1, state.settings.learningCap | 0);
+    var newWords = [];
+    if (learning.length < cap) {
+      var room = Math.min(2, cap - learning.length);
+      by('new').slice(0, room).forEach(function (id) { introduce(state, id, now); newWords.push(id); });
+      learning = learning.concat(newWords);
     }
 
-    var focusSlots = rounds - reviews.length;
-    var seqs = {};
-    focus.forEach(function (id) { seqs[id] = roundSequence(peek(state, id)); });
+    var reviewDue = by('review').filter(function (id) { var d = peek(state, id).due; return !d || d <= today; });
+    reviewDue.sort(function (a, b) { return peek(state, a).due < peek(state, b).due ? -1 : 1; });
+    var mastered = by('mastered');
+    mastered.sort(function (a, b) { return (peek(state, a).due || '') < (peek(state, b).due || '') ? -1 : 1; });
 
-    // Pass 0 gives every focus word its first activity, pass 1 its second...
-    var focusRounds = [];
-    var pass = 0;
-    while (focusRounds.length < focusSlots) {
-      var batch = shuffle(focus, rng);
-      for (var i = 0; i < batch.length && focusRounds.length < focusSlots; i++) {
-        var id = batch[i];
-        var seq = seqs[id];
-        focusRounds.push({ id: id, type: seq[pass % seq.length] });
+    var nMaint = mastered.length ? Math.min(mastered.length, Math.max(1, Math.round(N * 0.1))) : 0;
+    var nReview = Math.min(reviewDue.length, Math.round(N * 0.3));
+    if (!learning.length) nReview = Math.min(reviewDue.length, N - nMaint);
+    var nLearn = learning.length ? N - nMaint - nReview : 0;
+    if (!learning.length && !reviewDue.length) nMaint = mastered.length ? N : 0;
+
+    // One-picture "meet the word" trials: new words, plus two in the very
+    // first session so the child learns what tapping does.
+    var intro = newWords.slice();
+    var firstEver = state.sessionCount === 0 && ids.every(function (id) { return !peek(state, id).trials; });
+    if (firstEver) {
+      learning.forEach(function (id) { if (intro.length < 2 && intro.indexOf(id) === -1) intro.push(id); });
+    }
+    intro = intro.slice(0, Math.max(0, nLearn - 1));
+
+    var learnRounds = intro.map(function (id) { return { id: id, type: 'learn', check: 'intro' }; });
+    var findSlots = nLearn - learnRounds.length;
+    var findRounds = [];
+    while (findRounds.length < findSlots && learning.length) {
+      var batch = shuffle(learning, rng);
+      for (var i = 0; i < batch.length && findRounds.length < findSlots; i++) {
+        findRounds.push({ id: batch[i], type: 'find', check: 'learning' });
       }
-      pass += 1;
     }
+    // Intros come before that word's find trials (noBackToBack keeps per-word order).
+    var learnPart = learnRounds.concat(findRounds);
 
-    var reviewRounds = reviews.map(function (id) { return { id: id, type: 'find' }; });
+    var reviewRounds = reviewDue.slice(0, nReview).map(function (id) { return { id: id, type: 'find', check: 'review' }; });
+    var maintRounds = [];
+    for (var m = 0; m < nMaint; m++) maintRounds.push({ id: mastered[m % mastered.length], type: 'find', check: 'maint' });
 
-    // Start with an easy win, then spread the other reviews out.
+    // Start with an easy win when there is one, spread the checks out.
     var plan = [];
-    if (reviewRounds.length) plan.push(reviewRounds.shift());
-    var gap = reviewRounds.length ? Math.max(2, Math.floor(focusRounds.length / (reviewRounds.length + 1))) : 0;
-    focusRounds.forEach(function (r, idx) {
-      plan.push(r);
-      if (gap && reviewRounds.length && (idx + 1) % gap === 0) plan.push(reviewRounds.shift());
-    });
-    while (reviewRounds.length) plan.push(reviewRounds.shift());
-    plan = noBackToBack(plan.slice(0, rounds));
-
-    plan.forEach(function (r) {
-      if (mode !== 'mix') r.type = 'find';
-      if (r.type === 'find') r.style = mode === 'pop' ? 'bubbles' : (mode === 'mix' && rng() < 0.35 ? 'bubbles' : 'cards');
-    });
-    return plan;
+    if (maintRounds.length) plan.push(maintRounds.shift());
+    plan = plan.concat(spread(learnPart, reviewRounds.concat(maintRounds)));
+    plan = noBackToBack(plan.slice(0, N));
+    return { plan: plan, newWords: newWords };
   }
 
-  // Pick look-different wrong answers for "Find it".
-  function pickDistractors(words, targetId, count, state, rng) {
-    rng = rng || Math.random;
-    var target = null;
-    words.forEach(function (w) { if (w.id === targetId) target = w; });
-    if (!target) return [];
-    var imgOf = function (w) { return w.img || w.id; };
-    var pool = words.filter(function (w) {
-      if (w.id === target.id) return false;
-      if (imgOf(w) === imgOf(target)) return false;
-      if (w.look && w.look === target.look) return false;
-      return true;
-    });
-    // Prefer pictures the child has already met; new ones are fine too.
-    var familiar = shuffle(pool.filter(function (w) { return peek(state, w.id).seen > 0 || peek(state, w.id).findTries > 0; }), rng);
-    var fresh = shuffle(pool.filter(function (w) { return familiar.indexOf(w) === -1; }), rng);
-    var ordered = familiar.concat(fresh);
+  /*
+   * Wrong-answer pictures for a trial.
+   *   opts.level      learning level (1-3)
+   *   opts.hasStyle   fn(id) -> can this word be drawn in the trial's picture style?
+   *   opts.soundAlike fn(a, b)
+   * Always unrelated to the target (different category, doesn't sound alike,
+   * not a look-alike). Levels 1-2 prefer pictures the child already knows.
+   * Level 3 includes at least one word that is still being learned, so the
+   * target can't be found just by ruling out the known pictures.
+   */
+  function pickFoils(words, target, count, state, opts) {
+    opts = opts || {};
+    var rng = opts.rng || Math.random;
+    var level = opts.level || 1;
+    var hasStyle = opts.hasStyle || function () { return true; };
+    var alike = opts.soundAlike || function () { return false; };
+    var ok = function (w) {
+      return w.id !== target.id && w.cat !== target.cat && !(w.look && w.look === target.look) &&
+        !alike(w.id, target.id) && hasStyle(w.id);
+    };
+    var pool = words.filter(ok);
+    var st = function (w) { return stateOf(state, w.id); };
+    var known = shuffle(pool.filter(function (w) { return st(w) === 'mastered'; }), rng);
+    var learningSet = shuffle(pool.filter(function (w) { return st(w) === 'learning' || st(w) === 'review'; }), rng);
+    var fresh = shuffle(pool.filter(function (w) { return st(w) === 'new'; }), rng);
+    var ordered = level >= 3
+      ? learningSet.slice(0, 1).concat(known, fresh, learningSet.slice(1))
+      : known.concat(fresh, learningSet);
+
     var picked = [];
-    for (var i = 0; i < ordered.length && picked.length < count; i++) {
-      var w = ordered[i];
-      // First pass: every picture from a different category, so early
-      // rounds are about the word, not about telling a cat from a dog.
-      var clash = w.cat === target.cat || picked.some(function (p) {
-        return imgOf(p) === imgOf(w) || (p.look && p.look === w.look) || p.cat === w.cat;
+    var fits = function (w, strict) {
+      return picked.every(function (p) {
+        return p !== w && !(p.look && p.look === w.look) && !alike(p.id, w.id) && (!strict || p.cat !== w.cat);
       });
-      if (!clash) picked.push(w);
-    }
-    // Relax the category rule if we still need more.
-    for (var k = 0; k < ordered.length && picked.length < count; k++) {
-      var c = ordered[k];
-      if (picked.indexOf(c) !== -1) continue;
-      var clash2 = picked.some(function (p) { return imgOf(p) === imgOf(c) || (p.look && p.look === c.look); });
-      if (!clash2) picked.push(c);
-    }
+    };
+    [true, false].forEach(function (strict) {
+      ordered.forEach(function (w) { if (picked.length < count && fits(w, strict)) picked.push(w); });
+    });
     return picked.map(function (w) { return w.id; });
+  }
+
+  // Where the target goes: never the same spot as last time.
+  function placeTarget(field, lastPos, rng) {
+    rng = rng || Math.random;
+    var spots = [];
+    for (var i = 0; i < field; i++) if (i !== lastPos || field === 1) spots.push(i);
+    return spots[Math.floor(rng() * spots.length)];
+  }
+
+  /*
+   * Which picture of the target to show.
+   *   exemplars: [{ key, tier: 'narrow'|'wide', style }]
+   * Learning uses the similar ("narrow") pictures, including grown-up photos.
+   * Review and mastery checks use a picture the child hasn't been tested
+   * with, preferring the different-looking ("wide") ones.
+   */
+  function chooseExemplar(st, exemplars, check, rng) {
+    rng = rng || Math.random;
+    if (!exemplars.length) return null;
+    var pickFrom = function (list) { return list[Math.floor(rng() * list.length)]; };
+    if (check === 'review' || check === 'maint') {
+      var unseen = exemplars.filter(function (e) { return st.exSeen.indexOf(e.key) === -1; });
+      var wideUnseen = unseen.filter(function (e) { return e.tier === 'wide'; });
+      if (wideUnseen.length) return pickFrom(wideUnseen);
+      if (unseen.length) return pickFrom(unseen);
+      var notLast = exemplars.filter(function (e) { return e.key !== st.lastEx; });
+      return pickFrom(notLast.length ? notLast : exemplars);
+    }
+    var narrow = exemplars.filter(function (e) { return e.tier !== 'wide'; });
+    return pickFrom(narrow.length ? narrow : exemplars);
   }
 
   function awardSticker(state, stickers, rng) {
@@ -415,39 +553,34 @@
     return pick;
   }
 
-  function logSession(state, seconds, now) {
-    var log = dayLog(state, now);
-    log.sessions += 1;
-    log.seconds += Math.max(0, Math.round(seconds));
-  }
-
-  function streak(state, now) {
-    var key = dayKey(now);
-    var count = 0;
-    var d = new Date(now);
-    // Today counts if practiced; otherwise the streak can still be alive from yesterday.
-    if (!state.days[key]) d.setDate(d.getDate() - 1);
-    while (state.days[dayKey(d.getTime())]) {
-      count += 1;
-      d.setDate(d.getDate() - 1);
+  function daysPracticed(state, now, span) {
+    var n = 0;
+    for (var i = 0; i < (span || 7); i++) {
+      var log = state.days[dayKey(now - i * DAY_MS)];
+      if (log && (log.sessions || log.trials)) n += 1;
     }
-    return count;
+    return n;
   }
 
   function summary(state, words) {
-    var out = { total: words.length, mastered: 0, fromTwo: 0, fromMany: 0, started: 0, byCat: {} };
+    var out = { total: words.length, new: 0, learning: 0, review: 0, mastered: 0, levels: { 1: 0, 2: 0, 3: 0 }, byCat: {} };
     words.forEach(function (w) {
-      var lv = level(peek(state, w.id));
-      if (!out.byCat[w.cat]) out.byCat[w.cat] = { total: 0, mastered: 0, stars: 0 };
+      var st = peek(state, w.id);
+      out[st.state] += 1;
+      if (st.state === 'learning') out.levels[st.level] += 1;
+      if (!out.byCat[w.cat]) out.byCat[w.cat] = { total: 0, mastered: 0, started: 0 };
       var c = out.byCat[w.cat];
       c.total += 1;
-      c.stars += lv.stars;
-      if (lv.mastered) { out.mastered += 1; c.mastered += 1; }
-      if (lv.fromTwo) out.fromTwo += 1;
-      if (lv.fromMany) out.fromMany += 1;
-      if (lv.stage !== 'new') out.started += 1;
+      if (st.state === 'mastered') c.mastered += 1;
+      if (st.state !== 'new') c.started += 1;
     });
     return out;
+  }
+
+  function stageLabel(st) {
+    if (st.known) return 'already understood';
+    if (st.state === 'learning') return 'learning (' + fieldSize(st.level) + ' pictures)';
+    return st.state;
   }
 
   function csvCell(v) {
@@ -455,57 +588,67 @@
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
-  function reportCSV(state, words, catById, labelOf) {
-    var rows = [['Word', 'Category', 'Stage', 'Picks from 2', 'Picks from 3-4', 'Mastered',
-      'Right first try', 'Find it tries', 'Recent accuracy', 'Days right with 3+ pictures', 'Times heard', 'Last practiced']];
+  function pct(a, b) { return b ? Math.round(a / b * 100) + '%' : ''; }
+
+  // One row per word for a speech-language pathologist.
+  function reportRows(state, words, catById, extra) {
+    var rows = [['Word', 'Category', 'Stage', 'Pictures shown', 'Trials', 'Correct (no hint)', '% correct (no hint)',
+      'Needed a hint', 'Wrong first tap', 'Right on do-over', 'Pictures available', 'Pictures tested',
+      'First introduced', 'Mastered on', 'Last practiced', 'Notes']];
     words.forEach(function (w) {
       var st = peek(state, w.id);
-      var lv = level(st);
+      var x = extra ? extra(w) : {};
       rows.push([
-        labelOf ? labelOf(w) : w.word,
+        x.label || w.word,
         catById[w.cat] ? catById[w.cat].name : w.cat,
-        st.known ? 'already understood' : lv.stage,
-        lv.fromTwo ? 'yes' : 'no',
-        lv.fromMany ? 'yes' : 'no',
-        lv.mastered ? 'yes' : 'no',
-        st.findOk, st.findTries,
-        st.recent.length ? Math.round(recentAcc(st) * 100) + '%' : '',
-        st.winDays.length, st.seen,
-        st.last ? dayKey(st.last) : ''
+        stageLabel(st),
+        st.state === 'learning' ? fieldSize(st.level) : (st.state === 'new' ? '' : 4),
+        st.trials, st.correct, pct(st.correct, st.trials), st.prompted, st.errors, st.corrections,
+        x.exemplars != null ? x.exemplars : '', st.exSeen.length,
+        st.introduced, st.masteredOn, st.last ? dayKey(st.last) : '',
+        x.notes || ''
       ]);
     });
-    return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\n') + '\n';
+    return rows;
+  }
+
+  function reportCSV(state, words, catById, extra) {
+    return reportRows(state, words, catById, extra).map(function (r) { return r.map(csvCell).join(','); }).join('\n') + '\n';
   }
 
   var api = {
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
-    REVIEW_DAYS: REVIEW_DAYS,
-    MASTER_DAYS: MASTER_DAYS,
+    REVIEW_GAPS: REVIEW_GAPS,
+    MAINT_GAPS: MAINT_GAPS,
     dayKey: dayKey,
     dayDiff: dayDiff,
+    addDays: addDays,
+    fieldSize: fieldSize,
     createState: createState,
     normalizeState: normalizeState,
     newStat: newStat,
     stat: stat,
     peek: peek,
-    level: level,
-    isMastered: isMastered,
-    recentAcc: recentAcc,
-    choiceCount: choiceCount,
-    recordExposure: recordExposure,
-    recordFind: recordFind,
+    stateOf: stateOf,
+    isPaused: isPaused,
+    introduce: introduce,
+    pause: pause,
+    unpause: unpause,
     setKnown: setKnown,
-    isDue: isDue,
-    refreshFocus: refreshFocus,
-    addFocus: addFocus,
-    removeFocus: removeFocus,
-    roundSequence: roundSequence,
+    recordExposure: recordExposure,
+    recordTrial: recordTrial,
+    recordCorrection: recordCorrection,
+    applyLevelRules: applyLevelRules,
+    finishSession: finishSession,
     planSession: planSession,
-    pickDistractors: pickDistractors,
+    pickFoils: pickFoils,
+    placeTarget: placeTarget,
+    chooseExemplar: chooseExemplar,
     awardSticker: awardSticker,
-    logSession: logSession,
-    streak: streak,
+    daysPracticed: daysPracticed,
     summary: summary,
+    stageLabel: stageLabel,
+    reportRows: reportRows,
     reportCSV: reportCSV,
     shuffle: shuffle
   };

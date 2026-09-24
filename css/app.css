@@ -1,4 +1,4 @@
-/* Word Buddies: bright, chunky, toddler-friendly styles tuned for iPhone. */
+/* Word Wizard: bright, chunky, toddler-friendly styles tuned for iPhone. */
 
 @font-face {
   font-family: 'Fredoka';
@@ -212,25 +212,30 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 
 .mascot { position: relative; flex: none; }
 .mascot svg { width: 100%; height: 100%; overflow: visible; display: block; }
-.pip-bob { animation: bob 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
-.pip-eyes { animation: blink 4.2s infinite; transform-box: fill-box; transform-origin: center; }
-.pip-mouth { opacity: 0; transform-box: fill-box; transform-origin: center; }
-.mascot.talking .pip-smile { opacity: 0; }
-.mascot.talking .pip-mouth { opacity: 1; animation: talk 0.22s ease-in-out infinite alternate; }
-.pip-arm-l, .pip-arm-r { transform-box: fill-box; }
-.pip-arm-l { transform-origin: 90% 20%; }
-.pip-arm-r { transform-origin: 10% 20%; }
-.mascot.waving .pip-arm-r { animation: arm-wave 0.5s ease-in-out 4 alternate; }
-.mascot.happy .pip-bob { animation: jump 0.5s ease-out 2; }
-.mascot.happy .pip-arm-l { animation: arm-up-l 0.5s ease-out 2; }
-.mascot.happy .pip-arm-r { animation: arm-up-r 0.5s ease-out 2; }
-.mascot.listening .pip-bob { animation: tilt 1.6s ease-in-out infinite; }
+.wiz-bob { animation: bob 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.wiz-eyes { animation: blink 4.2s infinite; transform-box: fill-box; transform-origin: center; }
+.wiz-mouth { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.mascot.talking .wiz-smile { opacity: 0; }
+.mascot.talking .wiz-mouth { opacity: 1; animation: talk 0.22s ease-in-out infinite alternate; }
+.wiz-arm-l, .wiz-arm-r { transform-box: view-box; }
+.wiz-arm-l { transform-origin: 80px 146px; }  /* the shoulders, in the wizard's own coordinates */
+.wiz-arm-r { transform-origin: 120px 146px; }
+.mascot.waving .wiz-arm-r { animation: arm-wave 0.5s ease-in-out 4 alternate; }
+.mascot.happy .wiz-bob { animation: jump 0.5s ease-out 2; }
+.mascot.happy .wiz-arm-l { animation: arm-up-l 0.5s ease-out 2; }
+.mascot.happy .wiz-arm-r { animation: arm-up-r 0.5s ease-out 2; }
+.mascot.listening .wiz-bob { animation: tilt 1.6s ease-in-out infinite; }
+/* The stars on the wizard's hat and wand twinkle. */
+.wiz-star, .wiz-wand { animation: twinkle 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.wiz-wand { animation-delay: 1.2s; }
+.mascot.waving .wiz-wand { animation: twinkle 0.5s ease-in-out 4; }
+@keyframes twinkle { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.2) rotate(14deg); } }
 
 @keyframes bob { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-5px) scale(1.02, 0.98); } }
 @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
 @keyframes talk { from { transform: scaleY(0.35); } to { transform: scaleY(1.05); } }
 @keyframes jump { 0% { transform: translateY(0); } 40% { transform: translateY(-26px) scale(0.95, 1.06); } 80% { transform: translateY(0) scale(1.08, 0.92); } 100% { transform: translateY(0); } }
-@keyframes arm-wave { from { transform: rotate(0deg); } to { transform: rotate(-50deg); } }
+@keyframes arm-wave { from { transform: rotate(12deg); } to { transform: rotate(-22deg); } }
 @keyframes arm-up-l { 50% { transform: rotate(60deg); } }
 @keyframes arm-up-r { 50% { transform: rotate(-60deg); } }
 @keyframes tilt { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
@@ -280,7 +285,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 
 .modes {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   width: 100%;
   max-width: 520px;
@@ -332,10 +337,6 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 .pic { position: relative; width: 100%; height: 100%; display: grid; place-items: center; }
 .pic > img { width: 86%; height: 86%; object-fit: contain; filter: drop-shadow(0 6px 6px rgba(38, 38, 74, 0.18)); }
 .pic.photo > img { width: 100%; height: 100%; object-fit: cover; border-radius: 22px; filter: none; }
-.pic.stack > img { position: absolute; width: 58%; height: 58%; }
-.pic.stack > img:nth-child(1) { top: 4%; left: 21%; }
-.pic.stack > img:nth-child(2) { bottom: 6%; left: 2%; }
-.pic.stack > img:nth-child(3) { bottom: 6%; right: 2%; }
 
 .card {
   --cc: var(--blue);
@@ -391,8 +392,8 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
   padding-top: 4px;
 }
 .stage-main { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
-.stage.enter { animation: slide-in 0.45s cubic-bezier(0.2, 1.3, 0.4, 1); }
-@keyframes slide-in { from { transform: translateX(60px) scale(0.92); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Rounds fade in quietly: pictures appear, then the wizard speaks. */
+.stage.enter { animation: fade-in 0.3s ease-out; }
 
 .talk-row { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 560px; }
 .talk-row .mascot { width: 78px; height: 82px; }
@@ -470,28 +471,14 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
   .choices.n2 .choice { width: min(43vw, 32svh, 260px); }
 }
 .choice:active { transform: scale(0.96); }
-.choice.right { border-color: var(--green); box-shadow: 0 7px 0 var(--green-dark), 0 0 0 8px rgba(34, 197, 94, 0.3); animation: yay 0.7s ease-out; z-index: 2; }
-.choice.miss { animation: nope 0.45s ease-in-out; opacity: 0.55; }
+.choice.right, .big-card.right { border-color: var(--green); box-shadow: 0 7px 0 var(--green-dark), 0 0 0 8px rgba(34, 197, 94, 0.3); transform: scale(1.08); transition: transform 0.25s; z-index: 2; }
+/* A wrong tap gets no animation or sound; it just dims. */
+.choice.dim { opacity: 0.45; }
 .choice.fade { opacity: 0.25; transform: scale(0.9); }
+.choices.reshow { animation: fade-in 0.35s ease-out; }
 .choice.hint { animation: glow 1s ease-in-out infinite; }
-@keyframes yay { 0% { transform: scale(1); } 40% { transform: scale(1.14) rotate(-3deg); } 70% { transform: scale(0.98) rotate(2deg); } 100% { transform: scale(1.06); } }
-@keyframes nope { 0%, 100% { translate: 0 0; } 20% { translate: -10px 0; } 40% { translate: 10px 0; } 60% { translate: -7px 0; } 80% { translate: 7px 0; } }
 @keyframes glow { 0%, 100% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 0 rgba(255, 201, 40, 0.9); } 50% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 14px rgba(255, 201, 40, 0.55); transform: scale(1.04); } }
 
-.pointer {
-  position: absolute;
-  width: 64px;
-  height: 64px;
-  font-size: 56px;
-  line-height: 1;
-  right: -10px;
-  bottom: -18px;
-  animation: point 0.8s ease-in-out infinite alternate;
-  z-index: 3;
-  pointer-events: none;
-  filter: drop-shadow(0 3px 3px rgba(0,0,0,.25));
-}
-@keyframes point { from { transform: translate(0, 0) rotate(-20deg); } to { transform: translate(-10px, -10px) rotate(-20deg); } }
 
 /* Learn round: after the word is named, the card glows until the child taps it. */
 .big-card.tap-me { animation: tap-glow 1.2s ease-in-out infinite; }
@@ -500,36 +487,6 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
   50% { box-shadow: 0 7px 0 var(--cc), 0 0 0 16px rgba(255, 201, 40, 0.5); transform: scale(1.03); }
 }
 
-/* Pop rounds: the same "find it" task with pictures inside floating bubbles. */
-.choices.bubbles .choice {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 0;
-  box-shadow: none;
-  border-radius: 50%;
-  padding: 0;
-  animation: bob-bubble 3.2s ease-in-out infinite;
-}
-.choices.bubbles .choice .shell {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.95) 0 7%, rgba(255, 255, 255, 0) 12%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.35) 0 55%, rgba(168, 222, 255, 0.55) 80%, rgba(155, 93, 229, 0.45) 100%);
-  border: 4px solid rgba(255, 255, 255, 0.9);
-  box-shadow: inset 0 -10px 22px rgba(47, 123, 255, 0.25), 0 10px 22px rgba(38, 38, 74, 0.15);
-  pointer-events: none;
-}
-.choices.bubbles .choice .pic { position: relative; width: 78%; height: auto; aspect-ratio: 1 / 1; }
-.choices.bubbles .choice.hint { animation: bob-bubble 3.2s ease-in-out infinite; filter: drop-shadow(0 0 14px #FFD23F) drop-shadow(0 0 6px #FFD23F); }
-.choices.bubbles .choice.right { box-shadow: none; animation: none; transform: scale(1.12); transition: transform 0.3s; }
-.choices.bubbles .choice.popped .shell { animation: bubble-pop 0.35s ease-out forwards; }
-@keyframes bob-bubble { 0%, 100% { translate: 0 0; } 50% { translate: 0 -10px; } }
-@keyframes bubble-pop { 0% { transform: scale(1); opacity: 1; } 60% { transform: scale(1.3); opacity: 0.6; } 100% { transform: scale(1.5); opacity: 0; } }
 
 /* ------------------------------------------------------------------ */
 /* Picture animations (tap a picture to see it move)                   */
@@ -591,7 +548,9 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 /* Reward                                                              */
 /* ------------------------------------------------------------------ */
 
-.reward { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-evenly; text-align: center; min-height: 0; }
+.reward { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; min-height: 0; overflow-y: auto; margin: 0 -12px; padding: 0 12px 20px; touch-action: pan-y; }
+.reward > :first-child { margin-top: auto; }
+.reward > :last-child { margin-bottom: auto; }
 .big-title {
   font-size: clamp(42px, 13vw, 70px);
   font-weight: 700;
@@ -626,9 +585,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 .prize img { position: relative; width: 78%; height: 78%; animation: prize-in 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both; filter: drop-shadow(0 10px 8px rgba(38, 38, 74, 0.25)); }
 @keyframes prize-in { from { transform: scale(0) rotate(-40deg); } to { transform: scale(1) rotate(0); } }
 .prize-name { font-size: 34px; font-weight: 700; color: #fff; text-shadow: 0 3px 0 rgba(38, 38, 74, 0.3); margin: 0; }
-.reward-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-.practiced { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 520px; }
-.practiced img { width: 40px; height: 40px; background: rgba(255,255,255,.7); border-radius: 12px; padding: 3px; }
+.reward-after { width: 100%; display: flex; justify-content: center; }
 
 /* ------------------------------------------------------------------ */
 /* Words (picture book) and stickers                                   */
@@ -653,7 +610,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
   color: var(--ink);
   box-shadow: 0 4px 0 rgba(38, 38, 74, 0.15);
 }
-.chip img { width: 32px; height: 32px; }
+.chip img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 .chip.on { background: var(--cc); color: #fff; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
@@ -797,7 +754,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 .week em { font-style: normal; font-size: 11px; color: var(--ink-soft); }
 
 .cat-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-.cat-row img { width: 30px; height: 30px; }
+.cat-row img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
 .cat-row .name { width: 94px; font-size: 14px; font-weight: 600; }
 .cat-row .bar { flex: 1; margin: 0; height: 12px; }
 .cat-row .n { width: 42px; text-align: right; font-size: 13px; color: var(--ink-soft); }
@@ -900,6 +857,91 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 
 /* Respect "Reduce Motion": keep the short tap feedback, stop the looping motion. */
 @media (prefers-reduced-motion: reduce) {
-  .cloud, .logo span, .play-btn, .pip-bob, .next-btn, .gift, .choice.hint, .prize::before, .big-card.tap-me, .choices.bubbles .choice { animation: none !important; }
+  .cloud, .logo span, .play-btn, .wiz-bob, .wiz-star, .wiz-wand, .next-btn, .gift, .choice.hint, .prize::before, .big-card.tap-me { animation: none !important; }
   .stage.enter { animation-duration: 0.01ms; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Calm game screen (research: nothing moves while the word is said)   */
+/* ------------------------------------------------------------------ */
+
+body.calm .cloud { animation-play-state: paused; }
+.mascot.still .wiz-bob, .mascot.still .wiz-eyes, .mascot.still .wiz-star, .mascot.still .wiz-wand { animation: none; }
+.mascot.still.happy .wiz-bob { animation: jump 0.5s ease-out 2; }
+.mascot.still.happy .wiz-arm-l { animation: arm-up-l 0.5s ease-out 2; }
+.mascot.still.happy .wiz-arm-r { animation: arm-up-r 0.5s ease-out 2; }
+
+/* ------------------------------------------------------------------ */
+/* Grown-up cards in the child screens                                 */
+/* ------------------------------------------------------------------ */
+
+.coplay ol, .carry-list { padding-left: 20px; margin: 6px 0 10px; }
+.coplay li { margin: 4px 0; }
+.coplay h3, .carry h3 { font-family: var(--font-fun); font-size: 20px; margin: 12px 0 6px; color: var(--ink); }
+.coplay .btn-row .btn { flex: 1; }
+.chip-pic { width: 30px; height: 30px; flex: none; }
+.chip-pic .pic.photo > img, .mini-thumb .pic.photo > img { border-radius: 8px; }
+.badge-new, .badge-level { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; border-radius: 999px; padding: 2px 7px; margin-left: 2px; }
+.badge-new { background: var(--yellow); color: var(--ink); }
+.badge-level { background: #DCE8FF; color: var(--blue-dark); }
+.link-btn { font: inherit; font-weight: 700; color: var(--blue-dark); text-decoration: underline; padding: 0; }
+
+.carry { text-align: left; max-width: 520px; }
+.carry-list { list-style: none; padding: 0; }
+.carry-list li { display: flex; gap: 10px; align-items: center; margin: 8px 0; font-size: 15px; line-height: 1.4; }
+.carry-list .thumb { width: 44px; height: 44px; flex: none; }
+.carry .btn-row { justify-content: center; }
+
+.real-note {
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 18px;
+  padding: 10px 14px;
+  font-family: var(--font-plain);
+  font-size: 15px;
+  line-height: 1.4;
+  width: 100%;
+  max-width: 560px;
+  box-shadow: 0 4px 0 rgba(38, 38, 74, 0.12);
+}
+
+/* First-run word picker */
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; margin: 10px 0 14px; max-height: 46vh; overflow-y: auto; touch-action: pan-y; padding: 2px; }
+.pick { background: #fff; border: 3px solid var(--gray); border-radius: 16px; padding: 4px 2px 6px; display: flex; flex-direction: column; align-items: center; font-family: var(--font-fun); font-weight: 600; font-size: 15px; }
+.pick .pic { width: 52px; height: 52px; }
+.pick.on { border-color: var(--green); background: #E9FBEF; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
+
+/* ------------------------------------------------------------------ */
+/* Grown-ups: stages, photos, voice, notes                             */
+/* ------------------------------------------------------------------ */
+
+.stage-chip { display: inline-block; font-size: 11.5px; font-weight: 700; color: #fff; background: var(--sc, #8A94A6); border-radius: 999px; padding: 2px 8px; vertical-align: 2px; white-space: nowrap; }
+.word-row > .stage-chip { flex: none; min-width: 120px; text-align: center; }
+.p-muted.wrap { white-space: normal; }
+
+.photo-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0; }
+.photo-cell { position: relative; width: 84px; height: 84px; border-radius: 14px; background: var(--gray); }
+.photo-cell .pic.photo > img { border-radius: 14px; }
+.photo-remove { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 18px; line-height: 1; display: grid; place-items: center; }
+.photo-add { width: 84px; height: 84px; border-radius: 14px; border: 2px dashed var(--gray-dark); color: var(--ink-soft); font-weight: 700; font-size: 13px; background: #fff; }
+
+.rec-line { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--gray); flex-wrap: wrap; }
+.rec-line .rec-text { flex: 1 1 160px; font-weight: 600; font-size: 15px; }
+.rec-line .rec-status { width: 70px; color: var(--green-dark); font-weight: 800; font-size: 13px; }
+.rec-line .btn { font-family: var(--font-fun); }
+.rec-line.recording .rec-status { color: var(--red); }
+.sheet h3 { display: flex; align-items: center; gap: 8px; }
+.mini-thumb { display: inline-block; width: 30px; height: 30px; }
+textarea.notes { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; font-size: 16px; border-radius: 14px; border: 2px solid var(--gray-dark); resize: vertical; }
+
+/* Printable report (Print or save PDF) */
+#print-report { display: none; }
+@media print {
+  html, body { position: static; height: auto; overflow: visible; background: #fff; }
+  body > *:not(#print-report) { display: none !important; }
+  #print-report { display: block; font-family: var(--font-plain); color: #000; padding: 12px; }
+  #print-report h1 { font-size: 20px; margin: 0 0 4px; }
+  #print-report p { font-size: 12px; margin: 2px 0 8px; }
+  #print-report table { border-collapse: collapse; width: 100%; font-size: 9.5px; }
+  #print-report th, #print-report td { border: 1px solid #999; padding: 3px 4px; text-align: left; vertical-align: top; }
+  #print-report th { background: #eee; }
 }

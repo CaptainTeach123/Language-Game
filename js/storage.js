@@ -1,7 +1,8 @@
 /*
- * Word Buddies: saving progress on the device.
+ * Word Wizard: saving progress on the device.
+ * (The storage names below keep the app's first name, so saved progress carries over.)
  *   - Progress and settings: localStorage (small JSON).
- *   - Grown-up photos and voice recordings: IndexedDB, stored as
+ *   - Grown-up photos: IndexedDB, stored as
  *     ArrayBuffers (most reliable across iOS Safari versions).
  * Nothing ever leaves the device.
  */

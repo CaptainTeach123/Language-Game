@@ -1,13 +1,24 @@
 /*
- * Word Buddies: screens and games.
+ * Word Wizard: screens and games, made for Anthony.
  *
- * A listening game (receptive language): the child hears a word and taps
- * the matching picture. Nothing asks the child to talk.
+ * A listening game (receptive language) designed from the research brief
+ * "Designing a receptive hear-the-word, tap-the-picture game for a 2-year-old
+ * with speech delay". Anthony hears "Where's the ball?" and taps the ball.
  *
- * Child screens:  home, play session (learn and find-it rounds, some as
- *                 "pop the bubble"), reward (pick a present), words picture
- *                 book, sticker book.
- * Grown-up area:  progress, word list + customising, settings, help.
+ * Key rules from the research, and where they live:
+ *   - Played together: a co-play card before every session, a carryover
+ *     card after it, and a "Real things" mode (coplay, reward, real screens).
+ *   - The tap must mean attention to the named picture: taps are ignored
+ *     until the word has been said, and only the right picture gets praise.
+ *   - Trial script: 0.5 s quiet look, "Where's the ball?", wait, "Find the
+ *     ball!", wait, then a glowing hint ("Here's the ball!") logged as
+ *     prompted. Wrong tap: "Hmm, let's look. This is the ball." and a do-over
+ *     with the pictures moved. Correct: "Yes! That's the ball!"
+ *   - Calm screen during trials: no confetti per trial, no moving mascot or
+ *     clouds, a small celebration every 5 trials and a sticker at the end.
+ *   - Real photos, several per word, with a grown-up's own photos first.
+ *   - Every spoken line is a recorded ElevenLabs clip (audio/, tools/voice/).
+ * The learning schedule itself (levels, review, mastery) is in progress.js.
  */
 (function () {
   'use strict';
@@ -18,11 +29,17 @@
   var A = window.WB_AUDIO;
   var Speech = A.Speech;
   var Sfx = A.Sfx;
-  var WORDS = D.WORDS;
+  var PICTURE_WORDS = D.PICTURE_WORDS;
 
   var state = S.loadState();
   var app = document.getElementById('app');
   var audioReady = false;
+
+  var LOOK_MS = 500;        // quiet look before the prompt
+  var WAIT_MS = 6000;       // wait for a tap (research: 5-7 s)
+  var TAP_GAP_MS = 400;     // ignore rapid repeat taps
+  var MAX_PHOTOS = 4;
+  var CHILD = 'Anthony';
 
   /* ------------------------------------------------------------------ */
   /* Small helpers                                                       */
@@ -54,7 +71,6 @@
 
   function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-  function article(name) { return /^[aeiou]/i.test(name) ? 'an' : 'a'; }
   function save() { S.saveState(state); }
 
   var timers = [];
@@ -85,7 +101,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Words, labels and speech phrases                                    */
+  /* Words, photos and pictures                                          */
   /* ------------------------------------------------------------------ */
 
   function customOf(id) { return state.custom[id] || {}; }
@@ -93,87 +109,62 @@
     if (!state.custom[id]) state.custom[id] = {};
     return state.custom[id];
   }
-  function label(w) { return customOf(w.id).label || w.word; }
-  function hasRec(w) { return !!customOf(w.id).rec; }
-  function hasPhoto(w) { return !!customOf(w.id).photo; }
+  function label(w) { return w.word; }
   function fill(t, w) { return t.replace(/\{w\}/g, label(w)).replace(/\{W\}/g, cap(label(w))); }
-
-  function wordPart(w, rate) {
-    return { word: w.id, text: label(w), useRec: hasRec(w), rate: rate || 0.9 };
-  }
-
-  // "Where's the " + word + "?" as speech parts, using a grown-up's
-  // recording for the word itself when there is one.
-  function withWord(prefix, w, suffix, rate) {
-    prefix = prefix || '';
-    suffix = suffix || '';
-    if (hasRec(w)) {
-      var out = [];
-      if (prefix.trim()) out.push(prefix.trim());
-      out.push(wordPart(w, rate));
-      if (/[a-z]/i.test(suffix)) out.push(suffix.trim());
-      return out;
-    }
-    return [{ text: prefix + label(w) + suffix, rate: rate || 1 }];
-  }
-
-  // "the " before nouns, nothing before names and action words.
   function theWord(w) { return w.kind === 'noun' || w.kind === 'plural' ? 'the ' : ''; }
 
-  // In Pop rounds, objects get "Pop the dog!"; names and action words keep
-  // "Where's Mommy?" / "Find more!" so the sentence still makes sense.
-  function popsWell(w, bubbles) { return bubbles && (w.kind === 'noun' || w.kind === 'plural'); }
-
-  function findLead(w, bubbles) {
-    if (popsWell(w, bubbles)) return 'Pop the ';
-    if (w.kind === 'plural') return 'Where are the ';
-    if (w.kind === 'noun') return 'Where\'s the ';
-    if (w.kind === 'name') return 'Where\'s ';
-    return 'Find ';
+  function photoKeys(w) {
+    var c = customOf(w.id);
+    var keys = [];
+    if (c.photo) keys.push('photo:' + w.id); // single photo from version 1-2
+    (c.photos || []).forEach(function (n) { keys.push('photo:' + w.id + ':' + n); });
+    return keys;
   }
-  function findEnd(w, bubbles) { return popsWell(w, bubbles) || w.kind === 'core' ? '!' : '?'; }
-  function findPrompt(w, bubbles) { return findLead(w, bubbles) + label(w) + findEnd(w, bubbles); }
-  function findParts(w, bubbles) { return withWord(findLead(w, bubbles), w, findEnd(w, bubbles)); }
-
-  function tapPrompt(w) { return 'Tap ' + theWord(w) + label(w) + '!'; }
-  function tapParts(w) { return withWord('Tap ' + theWord(w), w, '!'); }
-
-  function thatsLead(w) {
-    if (w.kind === 'plural') return 'Those are the ';
-    if (w.kind === 'noun') return 'That\'s the ';
-    return 'That\'s ';
+  function hasPhoto(w) { return photoKeys(w).length > 0; }
+  // "me" (Anthony) can only be played once there's a photo of him.
+  function available(id) {
+    var w = D.byId[id];
+    if (!w || w.everyday) return false;
+    return !w.personal || hasPhoto(w);
+  }
+  function photoWordCount() {
+    return PICTURE_WORDS.filter(function (w) { return hasPhoto(w); }).length;
   }
 
-  var PRAISE = ['Yay!', 'Great job!', 'You did it!', 'Hooray!', 'Awesome!', 'Super!', 'Wow!', 'Way to go!', 'Good job!'];
-  function praise() {
-    var p = pick(PRAISE);
-    var name = state.settings.childName;
-    if (name && Math.random() < 0.35) p = p.replace(/!$/, ', ' + name + '!');
-    return p;
+  // Every picture of a word the game can test: grown-up photos first, then the
+  // built-in photos. For people, a grown-up's photos replace the stock ones
+  // (Anthony's Mommy, not a stranger).
+  function exemplarsFor(w) {
+    var own = photoKeys(w).map(function (k) { return { key: k, photo: k, style: 'photo', tier: 'narrow' }; });
+    if (own.length && w.look === 'person') return own;
+    return own.concat(D.photos(w));
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Pictures, stars, icons, mascot                                      */
-  /* ------------------------------------------------------------------ */
+  function displayExemplar(w) {
+    if (w.everyday) return { key: w.id, src: D.everydayPhoto(w), style: 'photo' };
+    return exemplarsFor(w)[0] || { key: w.id, src: 'img/ui/me.png', style: 'art' };
+  }
 
-  function imgPath(w) { return 'img/words/' + (w.img || w.id) + '.png'; }
+  // A built-in picture, for icons (never a grown-up's photo).
+  function iconSrc(w) {
+    if (w.everyday) return D.everydayPhoto(w);
+    var ex = D.photos(w)[0];
+    return ex ? ex.src : 'img/ui/me.png';
+  }
 
-  function picture(w) {
-    var el = h('div', { class: 'pic' });
-    if (hasPhoto(w)) {
-      el.classList.add('photo');
-      var img = h('img', { alt: label(w), draggable: 'false' });
-      el.appendChild(img);
-      S.getMediaURL('photo:' + w.id).then(function (url) {
-        if (url) { img.src = url; return; }
-        el.classList.remove('photo');
-        img.src = imgPath(w);
-      });
-      return el;
-    }
-    var n = w.stack || 1;
-    if (n > 1) el.classList.add('stack');
-    for (var i = 0; i < n; i++) el.appendChild(h('img', { src: imgPath(w), alt: i === 0 ? label(w) : '', draggable: 'false' }));
+  // The picture of a word when it's a wrong choice: one of its similar pictures.
+  function foilExemplar(w) {
+    return pick(exemplarsFor(w).filter(function (e) { return e.tier === 'narrow'; }));
+  }
+
+  function picture(w, ex) {
+    ex = ex || displayExemplar(w);
+    var el = h('div', { class: 'pic' + (ex.style === 'photo' ? ' photo' : '') });
+    var img = h('img', { alt: label(w), draggable: 'false' });
+    el.appendChild(img);
+    if (ex.photo) {
+      S.getMediaURL(ex.photo).then(function (url) { img.src = url || iconSrc(w); });
+    } else img.src = ex.src;
     return el;
   }
 
@@ -187,17 +178,59 @@
     el.addEventListener('animationend', done);
   }
 
-  var STAR_PATH = 'M12 2.4l2.95 5.98 6.6.96-4.78 4.65 1.13 6.57L12 17.46 6.1 20.56l1.13-6.57-4.78-4.65 6.6-.96z';
-  var STAR_COLORS = { fromTwo: '#2F7BFF', fromMany: '#FF8A00', mastered: '#22C55E' };
-  function starSvg(on, color) {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + STAR_PATH + '" fill="' + (on ? color : '#DDE3EE') + '"/></svg>';
+  /* ------------------------------------------------------------------ */
+  /* Voice: recorded ElevenLabs clips (audio/<name>.mp3)                 */
+  /* ------------------------------------------------------------------ */
+
+  // Clip names match tools/voice/lines.js: audio/ball-where.mp3 is "Where's the ball?"
+  var WORD_CLIPS = ['word', 'where', 'find', 'here', 'touch', 'thats', 'this', 'phrase'];
+  function shared(key) { return 'common-' + key; }
+  function wordClip(w) { return w.everyday ? shared(w.id + '-word') : w.id + '-word'; }
+  function phraseClip(w) { return w.everyday ? shared(w.id + '-phrase') : w.id + '-phrase'; }
+
+  // Short, varied praise, now and then with Anthony's name.
+  var PRAISE = ['yes', 'found', 'yay'];
+  var PRAISE_NAME = ['yes-name', 'great-name', 'found-name', 'way-name'];
+  var CELEBRATE = ['listener-name', 'high-five-name', 'magic-name'];
+  var GREET = ['hi-name', 'hello-name', 'wizard-name'];
+  function praise() { return shared(Math.random() < 0.35 ? pick(PRAISE_NAME) : pick(PRAISE)); }
+
+  // Everything the wizard says about a word during the game.
+  function speech(w) {
+    var c = function (key) { return w.id + '-' + key; };
+    var l = label(w);
+    var t = theWord(w);
+    var plural = w.kind === 'plural';
+    return {
+      text: {
+        prompt: (plural ? 'Where are the ' : 'Where\'s ' + t) + l + '?',
+        learn: (plural ? 'Here are the ' : 'Here\'s ' + t) + l + '! Touch ' + t + l + '.'
+      },
+      learn: [c('here'), { pause: 350 }, c('touch')],
+      prompt: [c('where')],
+      repeat: [c('find')],
+      hint: [c('here')],
+      correct: [praise(), { pause: 150 }, c('thats')],
+      look: [shared('look')],
+      thisIs: [c('this')],
+      word: [c('word')],
+      phrase: [c('phrase')]
+    };
   }
-  function starsHTML(lv) {
-    return starSvg(lv.fromTwo, STAR_COLORS.fromTwo) + starSvg(lv.fromMany, STAR_COLORS.fromMany) + starSvg(lv.mastered, STAR_COLORS.mastered);
+
+  // Fetch a session's clips while the grown-up reads the co-play card.
+  function preloadSession() {
+    var names = [shared('look'), shared('did-it-name'), shared('present')]
+      .concat(PRAISE.map(shared), PRAISE_NAME.map(shared), CELEBRATE.map(shared));
+    sessionWordIds().forEach(function (id) {
+      WORD_CLIPS.forEach(function (k) { names.push(id + '-' + k); });
+    });
+    Speech.preload(names);
   }
-  function starsTitle(lv) {
-    return 'Picks from 2: ' + (lv.fromTwo ? 'yes' : 'not yet') + ', Picks from 3 or 4: ' + (lv.fromMany ? 'yes' : 'not yet') + ', Mastered: ' + (lv.mastered ? 'yes' : 'not yet');
-  }
+
+  /* ------------------------------------------------------------------ */
+  /* Icons and mascot                                                    */
+  /* ------------------------------------------------------------------ */
 
   function arrowSvg(dir, color) {
     var d = dir === 'left' ? 'M19 12H7M12 5l-7 7 7 7' : 'M5 12h12M12 5l7 7-7 7';
@@ -210,39 +243,80 @@
   var PENCIL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.2L15.8 5.2a1.8 1.8 0 0 1 2.6 0l.4.4a1.8 1.8 0 0 1 0 2.6L8.2 18.8 4 20z" fill="none" stroke="#5C5C80" stroke-width="2" stroke-linejoin="round"/></svg>';
   var SHARE_SVG = '<svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4" stroke="#2F7BFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6v11h12V10h-2" stroke="#2F7BFF" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg>';
 
-  var PIP_SVG =
+  // Anthony's guide: a little cartoon wizard (tools/make-icons.js turns it into the app icon).
+  var WIZARD_SVG =
     '<svg viewBox="0 0 200 210" aria-hidden="true">' +
     '<defs>' +
-    '<radialGradient id="pipBody" cx="38%" cy="30%" r="75%"><stop offset="0" stop-color="#E2C9FF"/><stop offset=".5" stop-color="#A56BF0"/><stop offset="1" stop-color="#6A2FC2"/></radialGradient>' +
-    '<radialGradient id="pipBall" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#FFF3B0"/><stop offset=".6" stop-color="#FFC928"/><stop offset="1" stop-color="#F29D00"/></radialGradient>' +
+    '<linearGradient id="wizRobe" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0" stop-color="#4F7BFF"/>' +
+    '<stop offset="1" stop-color="#3B3FC9"/>' +
+    '</linearGradient>' +
+    '<linearGradient id="wizHat" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="#B47CFF"/>' +
+    '<stop offset="1" stop-color="#6A2FC2"/>' +
+    '</linearGradient>' +
+    '<radialGradient id="wizFace" cx="40%" cy="35%" r="70%">' +
+    '<stop offset="0" stop-color="#FFE7D3"/>' +
+    '<stop offset="1" stop-color="#F6B98E"/>' +
+    '</radialGradient>' +
     '</defs>' +
-    '<ellipse cx="100" cy="202" rx="56" ry="7" fill="rgba(38,38,74,.18)"/>' +
-    '<g class="pip-bob">' +
-    '<path d="M100 50 Q 94 28 110 16" stroke="#6A2FC2" stroke-width="5" fill="none" stroke-linecap="round"/>' +
-    '<circle cx="111" cy="14" r="11" fill="url(#pipBall)"/>' +
-    '<ellipse cx="72" cy="188" rx="21" ry="11" fill="#5B22AE"/>' +
-    '<ellipse cx="128" cy="188" rx="21" ry="11" fill="#5B22AE"/>' +
-    '<g class="pip-arm-l"><ellipse cx="36" cy="122" rx="14" ry="23" fill="#8446DC" transform="rotate(28 36 122)"/></g>' +
-    '<g class="pip-arm-r"><ellipse cx="164" cy="122" rx="14" ry="23" fill="#8446DC" transform="rotate(-28 164 122)"/></g>' +
-    '<circle cx="100" cy="116" r="72" fill="url(#pipBody)"/>' +
-    '<ellipse cx="100" cy="152" rx="40" ry="27" fill="#F5ECFF" opacity=".5"/>' +
-    '<g class="pip-eyes">' +
-    '<ellipse cx="76" cy="100" rx="17" ry="21" fill="#fff"/><ellipse cx="124" cy="100" rx="17" ry="21" fill="#fff"/>' +
-    '<circle cx="79" cy="104" r="10.5" fill="#26264A"/><circle cx="121" cy="104" r="10.5" fill="#26264A"/>' +
-    '<circle cx="83" cy="99" r="4" fill="#fff"/><circle cx="125" cy="99" r="4" fill="#fff"/>' +
+    '<ellipse cx="100" cy="203" rx="52" ry="6" fill="rgba(38,38,74,.18)"/>' +
+    '<g class="wiz-bob">' +
+    '<ellipse cx="82" cy="199" rx="15" ry="7" fill="#7A4A2A"/>' +
+    '<ellipse cx="118" cy="199" rx="15" ry="7" fill="#7A4A2A"/>' +
+    '<path d="M72 138 Q100 128 128 138 Q140 168 146 192 Q100 204 54 192 Q60 168 72 138Z" fill="url(#wizRobe)"/>' +
+    '<path d="M100 150 L100 196" stroke="#2F2FA8" stroke-width="3" stroke-linecap="round" opacity=".45"/>' +
+    '<path d="M80.0 170.0 L81.5 173.9 L85.7 174.1 L82.5 176.8 L83.5 180.9 L80.0 178.6 L76.5 180.9 L77.5 176.8 L74.3 174.1 L78.5 173.9Z" fill="#FFD23F"/>' +
+    '<path d="M122.0 161.0 L123.3 164.2 L126.8 164.5 L124.1 166.7 L124.9 170.0 L122.0 168.2 L119.1 170.0 L119.9 166.7 L117.2 164.5 L120.7 164.2Z" fill="#FFD23F"/>' +
+    '<circle cx="114" cy="186" r="2.2" fill="#FFD23F"/>' +
+    '<circle cx="88" cy="158" r="1.8" fill="#FFD23F"/>' +
+    '<g class="wiz-arm-l">' +
+    '<path d="M80 146 Q62 152 52 170" stroke="#4466F2" stroke-width="17" stroke-linecap="round" fill="none"/>' +
+    '<circle cx="50" cy="174" r="8.5" fill="#F9C9A4"/>' +
     '</g>' +
-    '<ellipse cx="57" cy="128" rx="11" ry="7" fill="#FF7EB6" opacity=".75"/>' +
-    '<ellipse cx="143" cy="128" rx="11" ry="7" fill="#FF7EB6" opacity=".75"/>' +
-    '<path class="pip-smile" d="M84 129 Q100 147 116 129" stroke="#26264A" stroke-width="5" fill="none" stroke-linecap="round"/>' +
-    '<g class="pip-mouth"><ellipse cx="100" cy="135" rx="13" ry="11.5" fill="#5A1033"/><ellipse cx="100" cy="141" rx="8" ry="4.5" fill="#FF6F91"/></g>' +
-    '</g></svg>';
+    '<g class="wiz-arm-r">' +
+    '<path d="M120 146 Q140 146 150 130" stroke="#4466F2" stroke-width="17" stroke-linecap="round" fill="none"/>' +
+    '<path d="M151 130 L171 96" stroke="#8B5A2B" stroke-width="5.5" stroke-linecap="round"/>' +
+    '<path class="wiz-wand" d="M173.0 79.0 L175.9 87.0 L184.4 87.3 L177.8 92.5 L180.1 100.7 L173.0 96.0 L165.9 100.7 L168.2 92.5 L161.6 87.3 L170.1 87.0Z" fill="#FFD23F" stroke="#F2A900" stroke-width="1.5" stroke-linejoin="round"/>' +
+    '<circle cx="151" cy="131" r="8.5" fill="#F9C9A4"/>' +
+    '</g>' +
+    '<ellipse cx="66" cy="104" rx="8" ry="10" fill="#8A5A3A"/>' +
+    '<ellipse cx="134" cy="104" rx="8" ry="10" fill="#8A5A3A"/>' +
+    '<circle cx="100" cy="112" r="36" fill="url(#wizFace)"/>' +
+    '<g class="wiz-eyes">' +
+    '<ellipse cx="86" cy="110" rx="9" ry="11" fill="#fff"/>' +
+    '<ellipse cx="114" cy="110" rx="9" ry="11" fill="#fff"/>' +
+    '<circle cx="87.5" cy="112" r="6" fill="#26264A"/>' +
+    '<circle cx="112.5" cy="112" r="6" fill="#26264A"/>' +
+    '<circle cx="90" cy="109" r="2.2" fill="#fff"/>' +
+    '<circle cx="115" cy="109" r="2.2" fill="#fff"/>' +
+    '</g>' +
+    '<ellipse cx="100" cy="120" rx="3.4" ry="2.4" fill="#EE9C74"/>' +
+    '<ellipse cx="73" cy="126" rx="7" ry="4.5" fill="#FF7EB6" opacity=".7"/>' +
+    '<ellipse cx="127" cy="126" rx="7" ry="4.5" fill="#FF7EB6" opacity=".7"/>' +
+    '<path class="wiz-smile" d="M90 127 Q100 138 110 127" stroke="#26264A" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    '<g class="wiz-mouth">' +
+    '<ellipse cx="100" cy="131" rx="8" ry="7" fill="#5A1033"/>' +
+    '<ellipse cx="100" cy="135" rx="5" ry="2.6" fill="#FF6F91"/>' +
+    '</g>' +
+    '<path d="M60 86 Q74 56 90 30 Q100 14 124 9 Q112 24 114 38 Q126 62 140 86Z" fill="url(#wizHat)"/>' +
+    '<path d="M64 78 Q100 70 136 78 L139 86 Q100 78 61 86Z" fill="#FFD23F"/>' +
+    '<ellipse cx="100" cy="86" rx="50" ry="9" fill="#5B2BB5"/>' +
+    '<path class="wiz-star" d="M102.0 41.0 L104.7 48.3 L112.5 48.6 L106.4 53.4 L108.5 60.9 L102.0 56.6 L95.5 60.9 L97.6 53.4 L91.5 48.6 L99.3 48.3Z" fill="#FFD23F"/>' +
+    '<circle cx="84" cy="64" r="2.4" fill="#FFE98A"/>' +
+    '<circle cx="118" cy="40" r="2" fill="#FFE98A"/>' +
+    '<path d="M124.0 3.0 L125.8 7.6 L130.7 7.8 L126.9 10.9 L128.1 15.7 L124.0 13.0 L119.9 15.7 L121.1 10.9 L117.3 7.8 L122.2 7.6Z" fill="#FFD23F"/>' +
+    '</g>' +
+    '</svg>';
 
   function mascot(cls) {
-    return h('div', { class: 'mascot' + (cls ? ' ' + cls : ''), html: PIP_SVG });
+    return h('div', { class: 'mascot' + (cls ? ' ' + cls : ''), html: WIZARD_SVG });
   }
 
+  // The wizard's mouth moves when talking, except during find-the-picture rounds,
+  // where nothing on screen should move while the word is being said.
   Speech.onTalk = function (on) {
-    var list = document.querySelectorAll('.mascot');
+    var list = document.querySelectorAll('.mascot:not(.still)');
     for (var i = 0; i < list.length; i++) list[i].classList.toggle('talking', on);
   };
 
@@ -257,7 +331,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Confetti                                                            */
+  /* Confetti (session end and every few finds only)                     */
   /* ------------------------------------------------------------------ */
 
   var FX = (function () {
@@ -378,6 +452,8 @@
     cleanups = [];
     app.innerHTML = '';
     app.className = 'screen-' + name;
+    // Keep the background still while a game is on screen.
+    document.body.classList.toggle('calm', name === 'session' || name === 'coplay');
     SCREENS[name](arg);
   }
 
@@ -412,10 +488,6 @@
     el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Welcome (first run)                                                 */
-  /* ------------------------------------------------------------------ */
-
   function installTip() {
     if (!isIOS || isStandalone()) return null;
     return h('div', { class: 'install-tip', html:
@@ -423,13 +495,34 @@
       'It opens full screen like an app, works offline, and keeps progress safe.' });
   }
 
+  var SUPPORT_NOTE = 'This game supports, but does not replace, speech-language therapy and everyday talk.';
+
+  /* ------------------------------------------------------------------ */
+  /* Welcome (first run)                                                 */
+  /* ------------------------------------------------------------------ */
+
+  // Research: start with 4-6 words the child partly knows, plus 1-2 new ones.
   SCREENS.welcome = function () {
-    var nameInput = h('input', { type: 'text', placeholder: 'e.g. Sam', autocomplete: 'off', autocapitalize: 'words', maxlength: '30' });
-    var start = h('button', { class: 'btn green', style: 'width:100%;margin-top:6px' }, 'Let\'s play!');
+    var chosen = [];
+    var grid = h('div', { class: 'pick-grid' });
+    PICTURE_WORDS.filter(function (w) { return !w.personal; }).forEach(function (w) {
+      var tile = h('button', { class: 'pick', 'aria-pressed': 'false', 'aria-label': label(w) }, picture(w), h('span', { text: label(w) }));
+      tile.addEventListener('click', function () {
+        var i = chosen.indexOf(w.id);
+        if (i !== -1) chosen.splice(i, 1);
+        else if (chosen.length < 4) chosen.push(w.id);
+        else { toast('Up to 4 to start. You can change words later.'); return; }
+        tile.classList.toggle('on', chosen.indexOf(w.id) !== -1);
+        tile.setAttribute('aria-pressed', chosen.indexOf(w.id) !== -1 ? 'true' : 'false');
+        Sfx.tap();
+      });
+      grid.appendChild(tile);
+    });
+    var start = h('button', { class: 'btn green', style: 'width:100%' }, 'Start');
     start.addEventListener('click', function () {
       A.unlock();
       audioReady = true;
-      state.settings.childName = nameInput.value.trim();
+      chosen.forEach(function (id) { P.introduce(state, id, Date.now()); });
       state.settings.welcomed = true;
       S.saveState(state, true);
       S.requestPersist();
@@ -438,11 +531,13 @@
     app.appendChild(h('div', { class: 'welcome' },
       mascot('waving'),
       h('div', { class: 'panel' },
-        h('h2', { text: 'Welcome to Word Buddies!' }),
-        h('p', { text: 'A listening game that helps your little one understand 50 important first words. Pip says a word, and your child finds the matching picture.' }),
-        h('p', { text: 'Best played together: sit with your child, let them do the tapping, and cheer them on.' }),
-        h('label', { class: 'field' }, 'Your child\'s first name (optional)', nameInput),
+        h('h2', { text: 'Welcome to Word Wizard!' }),
+        h('p', { text: 'A listening game for ' + CHILD + ': the wizard says a word and ' + CHILD + ' taps the matching picture. It\'s made to be played together, for 5 to 10 minutes at a time, alongside everyday talk, play and reading.' }),
+        h('h3', { text: 'Which words does ' + CHILD + ' partly understand?' }),
+        h('p', { class: 'p-muted', text: 'Pick up to 4. We\'ll start with these and add 1 or 2 new words at a time. Not sure? Just tap Start.' }),
+        grid,
         start,
+        h('p', { class: 'p-muted', text: SUPPORT_NOTE }),
         installTip()
       )
     ));
@@ -458,13 +553,7 @@
     return n;
   }
 
-  function greeting() {
-    var name = state.settings.childName;
-    return pick([
-      name ? 'Hi ' + name + '! Let\'s play!' : 'Hi! Let\'s play!',
-      name ? 'Hello ' + name + '! Tap the big green button!' : 'Hello! Tap the big green button!'
-    ]);
-  }
+  function greeting() { return shared(pick(GREET)); }
 
   function modeBtn(icon, text, color, fn) {
     return h('button', {
@@ -480,34 +569,32 @@
     var count = h('button', { class: 'sticker-count', 'aria-label': 'My stickers', onclick: function () { Sfx.tap(); go('stickers'); } },
       h('img', { src: 'img/ui/star.png', alt: '' }), String(stickerTotal()));
 
-    var logo = h('h1', { class: 'logo', 'aria-label': 'Word Buddies' });
+    var logo = h('h1', { class: 'logo', 'aria-label': 'Word Wizard' });
     var colors = ['#FF5C8A', '#FF8A00', '#FFC928', '#22C55E', '#2F7BFF', '#9B5DE5'];
-    'Word Buddies'.split('').forEach(function (ch, i) {
+    'Word Wizard'.split('').forEach(function (ch, i) {
       if (ch === ' ') { logo.appendChild(h('span', { class: 'gap' })); return; }
       logo.appendChild(h('span', { text: ch, style: 'color:' + colors[i % colors.length] + ';animation-delay:' + (i * 0.12) + 's', 'aria-hidden': 'true' }));
     });
 
-    var pip = mascot('waving');
-    var pipWrap = h('button', { class: 'home-mascot', 'aria-label': 'Say hi' }, pip);
-    pipWrap.addEventListener('click', function () {
+    var wizard = h('button', { class: 'home-mascot', 'aria-label': 'Say hi' }, mascot('waving'));
+    wizard.addEventListener('click', function () {
       Sfx.boing();
       cheerMascot();
       Speech.say([greeting()]);
     });
 
     var play = h('button', { class: 'play-btn', 'aria-label': 'Play', html: PLAY_SVG });
-    play.addEventListener('click', function () { Sfx.pop(); startSession('mix'); });
+    play.addEventListener('click', function () { Sfx.pop(); startSession(); });
 
     var modes = h('nav', { class: 'modes' },
       modeBtn('picture', 'Words', '#2F7BFF', function () { go('words'); }),
-      modeBtn('search', 'Find', '#FF8A00', function () { startSession('find'); }),
-      modeBtn('party', 'Pop', '#22C55E', function () { startSession('pop'); }),
+      modeBtn('search', 'Real things', '#FF8A00', function () { go('real'); }),
       modeBtn('star', 'Stickers', '#FF5C8A', function () { go('stickers'); })
     );
 
     app.appendChild(h('div', { class: 'home' },
       topbar(count, null, h('div', {}, gear, h('div', { class: 'hold-label', text: 'Grown-ups' }))),
-      logo, pipWrap, play, modes));
+      logo, wizard, play, modes));
 
     if (audioReady) later(function () { Speech.say([greeting()]); }, 450);
   };
@@ -518,12 +605,62 @@
 
   var session = null;
 
-  function startSession(mode) {
-    var plan = P.planSession(state, D.START_ORDER, { mode: mode, rounds: state.settings.sessionRounds }, Date.now());
+  function startSession() {
+    var planned = P.planSession(state, D.START_ORDER, { trials: state.settings.sessionTrials, available: available }, Date.now());
     save();
-    session = { mode: mode, plan: plan, idx: 0, started: Date.now(), words: [], token: 0, el: {} };
-    go('session');
+    if (!planned.plan.length) { toast('No words to play yet. Add some in Grown-ups > Words.'); return; }
+    session = {
+      id: Date.now(), plan: planned.plan, newWords: planned.newWords, idx: 0, started: 0,
+      words: [], token: 0, el: {}, lastPos: -1, done: 0, lastOk: true, bonus: false
+    };
+    go('coplay');
   }
+
+  function sessionWordIds() {
+    var ids = [];
+    session.plan.forEach(function (r) { if (ids.indexOf(r.id) === -1) ids.push(r.id); });
+    return ids;
+  }
+
+  /* Before each session: a short card for the grown-up (research: co-use helps). */
+  SCREENS.coplay = function () {
+    if (!session) { go('home'); return; }
+    var chips = h('div', { class: 'focus-chips' });
+    sessionWordIds().forEach(function (id) {
+      var w = D.byId[id];
+      chips.appendChild(h('div', { class: 'focus-chip' }, h('div', { class: 'chip-pic' }, picture(w)), label(w),
+        session.newWords.indexOf(id) !== -1 ? h('span', { class: 'badge-new', text: 'new' }) : null));
+    });
+    var tips = [];
+    if (!sessionWordIds().some(function (id) { return hasPhoto(D.byId[id]); })) {
+      tips.push('Add photos of ' + CHILD + '\'s own things and people (his ball, his cup, Mommy). Photos of his own world help words carry over to real life.');
+    }
+    preloadSession();
+    var ready = h('button', { class: 'btn green', style: 'flex:1' }, 'We\'re ready!');
+    ready.addEventListener('click', function () {
+      A.unlock();
+      audioReady = true;
+      session.started = Date.now();
+      go('session');
+    });
+    app.appendChild(h('div', { class: 'welcome' },
+      h('div', { class: 'panel coplay' },
+        h('h2', { text: 'Play together' }),
+        h('ol', {},
+          h('li', { html: '<b>Sit beside ' + CHILD + '</b>, with the phone between you.' }),
+          h('li', { html: 'After the wizard asks, <b>say it too</b>: "Where\'s the ball?" Then <b>wait</b>.' }),
+          h('li', { html: '<b>Let ' + CHILD + ' tap.</b> Try not to point; if he needs help, the game shows the answer.' }),
+          h('li', { html: '<b>Cheer when they find it</b> and say the word again: "Ball!"' })),
+        h('h3', { text: 'Today\'s words' }),
+        chips,
+        tips.length ? h('div', { class: 'install-tip' }, h('b', { text: 'Tip: ' }), tips[0], ' ', h('button', {
+          class: 'link-btn', onclick: function () { session = null; go('parent', 'words'); }
+        }, 'Grown-ups > Words')) : null,
+        h('p', { class: 'p-muted', text: SUPPORT_NOTE }),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn white', onclick: function () { session = null; go('home'); } }, 'Not now'),
+          ready))));
+  };
 
   SCREENS.session = function () {
     if (!session) { go('home'); return; }
@@ -538,7 +675,9 @@
   };
 
   function leaveSession() {
-    if (session && session.idx > 0) P.logSession(state, (Date.now() - session.started) / 1000, Date.now());
+    if (session && session.started && session.done) {
+      P.finishSession(state, session.id, (Date.now() - session.started) / 1000, Date.now());
+    }
     save();
     session = null;
     go('home');
@@ -562,19 +701,31 @@
     var w = D.byId[r.id];
     if (session.words.indexOf(w.id) === -1) session.words.push(w.id);
     updateTrail();
-    var rc = roundContext();
-    (r.type === 'learn' ? learnRound : findRound)(w, rc, r);
+    (r.type === 'learn' ? learnTrial : findTrial)(w, roundContext(), r);
   }
 
   function roundContext() {
     var token = session.token;
     var moved = false;
     return {
-      alive: function () { return session && session.token === token; },
-      advance: function (delay) {
+      alive: function () { return !!session && session.token === token; },
+      // ok: did the round end with the child finding the picture?
+      done: function (ok, delay) {
         if (moved || !session || session.token !== token) return;
         moved = true;
-        later(nextRound, delay == null ? 600 : delay);
+        session.done += 1;
+        session.lastOk = ok;
+        var extra = 0;
+        // A small celebration every 5 pictures (research: about every 4-5 trials).
+        if (ok && session.done % 5 === 0) {
+          extra = 2200;
+          Sfx.sparkle();
+          cheerMascot();
+          later(function () { Speech.say([shared(pick(CELEBRATE))]); }, 300);
+          var stage = session.el.body.querySelector('.stage');
+          if (stage) FX.fromEl(stage.querySelector('.right') || stage, 30);
+        }
+        later(nextRound, (delay == null ? 900 : delay) + extra);
       }
     };
   }
@@ -582,195 +733,312 @@
   function nextRound() {
     if (!session) return;
     session.idx += 1;
-    if (session.idx >= session.plan.length) {
-      P.logSession(state, (Date.now() - session.started) / 1000, Date.now());
-      save();
-      go('reward');
-    } else {
-      showRound();
+    var timeUp = Date.now() - session.started > state.settings.maxMinutes * 60000;
+    var over = session.idx >= session.plan.length || timeUp;
+    if (over) {
+      // End on a success: one easy picture if the last one didn't end in a find.
+      if (!session.lastOk && !session.bonus) {
+        var easy = easyWord();
+        if (easy) {
+          session.bonus = true;
+          session.plan = session.plan.slice(0, session.idx).concat([{ id: easy, type: 'find', check: 'bonus' }]);
+          syncTrail();
+          showRound();
+          return;
+        }
+      }
+      endSession();
+      return;
     }
+    showRound();
+  }
+
+  function syncTrail() {
+    var trail = session.el.trail;
+    while (trail.children.length > session.plan.length) trail.removeChild(trail.lastChild);
+    while (trail.children.length < session.plan.length) trail.appendChild(h('i'));
+  }
+
+  // A word the child reliably finds, for ending on a win.
+  function easyWord() {
+    var best = null;
+    var bestScore = -1;
+    PICTURE_WORDS.forEach(function (w) {
+      if (!available(w.id)) return;
+      var st = P.peek(state, w.id);
+      if (!st.trials && st.state !== 'mastered') return;
+      var score = st.state === 'mastered' ? 2 : (st.trials ? st.correct / st.trials : 0);
+      if (score > bestScore) { bestScore = score; best = w.id; }
+    });
+    return best;
+  }
+
+  function endSession() {
+    P.finishSession(state, session.id, (Date.now() - session.started) / 1000, Date.now());
+    save();
+    go('reward');
   }
 
   function makeStage(text) {
-    var pip = mascot();
+    var guide = mascot('still');
     var bubble = h('div', { class: 'bubble', text: text || '' });
-    var talk = h('div', { class: 'talk-row' }, pip, bubble);
+    var talk = h('div', { class: 'talk-row' }, guide, bubble);
     var main = h('div', { class: 'stage-main' });
     var stage = h('section', { class: 'stage enter' }, talk, main);
     session.el.body.appendChild(stage);
-    return { stage: stage, talk: talk, main: main, bubble: bubble, pip: pip };
+    return { stage: stage, talk: talk, main: main, bubble: bubble, guide: guide };
   }
 
-  // A big picture card. Tapping it says the word, unless onTap() handles
-  // the tap and returns true.
-  function bigCard(w, onTap) {
-    var cat = D.catById[w.cat];
-    var pic = picture(w);
-    var card = h('button', { class: 'card big-card', style: '--cc:' + cat.color, 'aria-label': label(w) },
-      pic, h('div', { class: 'word-label', text: label(w) }));
-    card.addEventListener('click', function () {
-      Sfx.pop();
-      animatePic(pic, w);
-      if (onTap && onTap() === true) return;
-      Speech.say([wordPart(w, 0.85)]);
-    });
-    return card;
-  }
-
-  function flyStar(fromEl) {
-    if (!fromEl || !fromEl.animate) return;
-    var dot = session && session.el.trail ? session.el.trail.children[session.idx] : null;
-    var r1 = fromEl.getBoundingClientRect();
-    var r2 = dot ? dot.getBoundingClientRect() : { left: window.innerWidth / 2, top: 0, width: 0, height: 0 };
-    var size = 72;
-    var img = h('img', { src: 'img/ui/star.png', alt: '', style:
-      'position:fixed;z-index:55;pointer-events:none;width:' + size + 'px;height:' + size + 'px;left:' +
-      (r1.left + r1.width / 2 - size / 2) + 'px;top:' + (r1.top + r1.height / 2 - size / 2) + 'px' });
-    document.body.appendChild(img);
-    var dx = (r2.left + r2.width / 2) - (r1.left + r1.width / 2);
-    var dy = (r2.top + r2.height / 2) - (r1.top + r1.height / 2);
-    var anim = img.animate([
-      { transform: 'translate(0,0) scale(0.3) rotate(0deg)' },
-      { transform: 'translate(0,-50px) scale(1.25) rotate(120deg)', offset: 0.35 },
-      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(0.3) rotate(360deg)' }
-    ], { duration: 1100, easing: 'ease-in-out' });
-    var gone = function () { if (img.parentNode) img.remove(); };
-    anim.onfinish = gone;
-    setTimeout(gone, 1600);
-  }
-
-  // The child picked the right picture: cheer, name it again, move on.
-  function celebrate(el, pic, w, bubble, rc) {
-    animatePic(pic, w);
-    Sfx.correct();
-    FX.fromEl(el, 50);
-    cheerMascot();
-    flyStar(el);
-    var p = praise();
-    bubble.textContent = p + ' ' + cap(label(w)) + '!';
-    Speech.say([p, { pause: 120 }].concat(withWord('', w, '!', 0.85))).then(function () { rc.advance(700); });
-    later(function () { rc.advance(0); }, 6000);
-  }
-
-  /* Learn: see and hear the word, then tap it. */
-  function learnRound(w, rc) {
-    var phrase = fill(w.phrase, w);
-    var s = makeStage(phrase);
-    var ready = false;
-    var done = false;
-    var card = bigCard(w, function () {
-      if (!ready || done) return false;
-      done = true;
-      card.classList.remove('tap-me');
-      celebrate(card, pic, w, s.bubble, rc);
+  // Ignore two-finger or palm touches and rapid repeat taps.
+  function tapFilter(area) {
+    var down = 0;
+    var multi = false;
+    var lastTap = 0;
+    area.addEventListener('pointerdown', function (e) {
+      down += 1;
+      if (down > 1 || (e.width || 0) > 80 || (e.height || 0) > 80) multi = true;
+    }, true);
+    var up = function () {
+      down = Math.max(0, down - 1);
+      if (!down) setTimeout(function () { multi = false; }, 60);
+    };
+    area.addEventListener('pointerup', up, true);
+    area.addEventListener('pointercancel', up, true);
+    return function () {
+      var now = Date.now();
+      if (multi || now - lastTap < TAP_GAP_MS) return false;
+      lastTap = now;
       return true;
-    });
-    var pic = card.querySelector('.pic');
+    };
+  }
+
+  /* Meet the word: one picture, "Here's the ball! Touch the ball." */
+  function learnTrial(w, rc) {
+    var st = P.peek(state, w.id);
+    var ex = P.chooseExemplar(st, exemplarsFor(w), 'intro', Math.random) || displayExemplar(w);
+    var L = speech(w);
+    var s = makeStage(L.text.learn);
+    var cat = D.catById[w.cat];
+    var pic = picture(w, ex);
+    var card = h('button', { class: 'card big-card', style: '--cc:' + cat.color, 'aria-label': label(w) }, pic);
     var next = h('button', { class: 'next-btn hidden', 'aria-label': 'Next', html: arrowSvg('right', '#fff') });
-    next.addEventListener('click', function () { Sfx.whoosh(); rc.advance(0); });
+    var accept = tapFilter(card);
+    var ready = false;
+    var finished = false;
     s.main.appendChild(card);
     s.stage.appendChild(next);
     P.recordExposure(state, w.id, Date.now());
     save();
 
-    function askToTap() {
-      if (ready || done || !rc.alive()) return;
-      ready = true;
-      card.classList.add('tap-me');
-      s.bubble.textContent = tapPrompt(w);
-      next.classList.remove('hidden');
-      Speech.say(tapParts(w));
-    }
-
-    var anim = { run: function () { animatePic(pic, w); } };
-    var intro = function () {
-      return Speech.say([anim, wordPart(w, 0.8), { pause: 350 }, phrase, { pause: 300 }, anim, wordPart(w, 0.8)]);
-    };
-    session.repeat = function () {
-      if (ready) return Speech.say([anim].concat(withWord('', w, '!', 0.8), [{ pause: 250 }], tapParts(w)));
-      return intro();
-    };
-    later(function () {
-      intro().then(function (ok) { if (ok) later(askToTap, 300); });
-    }, 350);
-    later(askToTap, 7000); // in case speech never finishes
-    later(function () { if (!done && ready) Speech.say(tapParts(w)); }, 16000);
-  }
-
-  /* Find it: hear the word, tap its picture. Only the first tap counts. */
-  function findRound(w, rc, round) {
-    var bubbles = round && round.style === 'bubbles';
-    var n = P.choiceCount(P.peek(state, w.id));
-    var ids = P.shuffle(P.pickDistractors(WORDS, w.id, n - 1, state).concat([w.id]), Math.random);
-    n = ids.length;
-    var s = makeStage(findPrompt(w, bubbles));
-    var grid = h('div', { class: 'choices n' + n + (bubbles ? ' bubbles' : '') });
-    var firstTap = true;
-    var misses = 0;
-    var done = false;
-    var targetBtn = null;
-
-    ids.forEach(function (id, i) {
-      var ww = D.byId[id];
-      var pic = picture(ww);
-      var btn = bubbles
-        ? h('button', { class: 'choice bubble-choice', style: 'animation-delay:' + (-i * 0.7) + 's', 'aria-label': label(ww) }, h('div', { class: 'shell' }), pic)
-        : h('button', { class: 'card choice', 'aria-label': label(ww) }, pic);
-      if (id === w.id) targetBtn = btn;
-      btn.addEventListener('click', function () {
-        if (done) return;
-        if (id === w.id) {
-          done = true;
-          if (firstTap) { P.recordFind(state, w.id, true, n, Date.now()); save(); }
-          firstTap = false;
-          btn.classList.remove('hint');
-          var ptr = btn.querySelector('.pointer');
-          if (ptr) ptr.remove();
-          btn.classList.add('right');
-          if (bubbles) { btn.classList.add('popped'); Sfx.pop(); }
-          Array.prototype.forEach.call(grid.children, function (c) { if (c !== btn) c.classList.add('fade'); });
-          celebrate(btn, pic, w, s.bubble, rc);
-        } else {
-          if (firstTap) { P.recordFind(state, w.id, false, n, Date.now()); save(); }
-          firstTap = false;
-          misses += 1;
-          btn.classList.remove('miss');
-          void btn.offsetWidth;
-          btn.classList.add('miss');
-          animatePic(pic, ww);
-          Sfx.soft();
-          // Errorless help: name what they tapped, then show the right one.
-          targetBtn.classList.add('hint');
-          if (misses >= 2 && !targetBtn.querySelector('.pointer')) {
-            targetBtn.appendChild(h('div', { class: 'pointer', 'aria-hidden': 'true', text: '👆' }));
-          }
-          Speech.say(withWord(thatsLead(ww), ww, '.').concat([{ pause: 250 }], findParts(w, bubbles)));
-        }
-      });
-      grid.appendChild(btn);
+    next.addEventListener('click', function () { if (!finished) { finished = true; Sfx.whoosh(); rc.done(false, 0); } });
+    card.addEventListener('click', function () {
+      if (!ready || finished || !accept()) return;
+      finished = true;
+      card.classList.remove('tap-me');
+      card.classList.add('right');
+      animatePic(pic, w);
+      Sfx.correct();
+      Speech.say(L.correct).then(function () { rc.done(true); });
+      later(function () { rc.done(true); }, 6000);
     });
 
+    var begin = function () {
+      if (ready || !rc.alive()) return;
+      ready = true;
+      card.classList.add('tap-me');
+      card.parentNode && card.parentNode.setAttribute('data-ready', '1');
+      later(function () { if (!finished) Speech.say(L.repeat); }, WAIT_MS);
+      later(function () { if (!finished) next.classList.remove('hidden'); }, WAIT_MS * 2);
+    };
+    session.repeat = function () { return Speech.say(L.learn); };
+    later(function () {
+      Speech.say(L.learn).then(function (ok) { if (ok) begin(); });
+    }, LOOK_MS);
+    later(begin, 5000); // in case speech never finishes
+  }
+
+  /* Find it: "Where's the ball?" among 2-4 pictures. */
+  function findTrial(w, rc, round) {
+    var st = P.peek(state, w.id);
+    var check = round.check;
+    var level = check === 'learning' ? st.level : (check === 'bonus' ? 1 : 3);
+    var field = P.fieldSize(level);
+    var pool = PICTURE_WORDS.filter(function (x) { return available(x.id); });
+    var foils = P.pickFoils(pool, w, field - 1, state, { level: level, soundAlike: D.soundAlike });
+    field = foils.length + 1;
+    var ex = P.chooseExemplar(st, exemplarsFor(w), check, Math.random) || exemplarsFor(w)[0];
+
+    var L = speech(w);
+    var s = makeStage(L.text.prompt);
+    var grid = h('div', { class: 'choices n' + field });
+    var accept = tapFilter(grid);
+    var buttons = {};
+    var targetBtn = null;
+    var locked = true;
+    var mode = 'first';        // 'first' | 'hint' | 'correction' | 'over'
+    var responded = false;     // first response logged?
+    var waitToken = 0;
+
+    function build(pos) {
+      var order = P.shuffle(foils, Math.random);
+      order.splice(pos, 0, w.id);
+      grid.innerHTML = '';
+      order.forEach(function (id) {
+        if (!buttons[id]) {
+          var ww = D.byId[id];
+          var btn = h('button', { class: 'card choice', 'aria-label': label(ww) }, picture(ww, id === w.id ? ex : foilExemplar(ww)));
+          btn.addEventListener('click', function () { tap(id, btn); });
+          buttons[id] = btn;
+          if (id === w.id) targetBtn = btn;
+        }
+        buttons[id].className = 'card choice';
+        grid.appendChild(buttons[id]);
+      });
+    }
+
+    var pos = P.placeTarget(field, session.lastPos, Math.random);
+    session.lastPos = pos;
+    build(pos);
     s.main.appendChild(grid);
-    session.repeat = function () { return Speech.say(findParts(w, bubbles)); };
-    later(session.repeat, 350);
-    // Ask again if the child is still looking. No visual hint, so the first tap stays independent.
-    later(function () { if (firstTap) session.repeat(); }, 9000);
-    later(function () { if (firstTap) session.repeat(); }, 18000);
+
+    function log(outcome) {
+      if (responded || check === 'bonus') return;
+      responded = true;
+      P.recordTrial(state, w.id, outcome, { session: session.id, exemplar: ex.key }, Date.now());
+      save();
+    }
+
+    function unlock() {
+      if (!rc.alive() || mode === 'over') return;
+      locked = false;
+      grid.setAttribute('data-ready', '1');
+    }
+
+    // Ask, then wait; ask again; then show the answer as a hint.
+    function ask(parts) {
+      locked = true;
+      grid.removeAttribute('data-ready');
+      var my = ++waitToken;
+      later(function () { if (my === waitToken) unlock(); }, 5000); // in case speech never finishes
+      return Speech.say(parts).then(function () {
+        if (my !== waitToken || !rc.alive()) return;
+        unlock();
+        later(function () {
+          if (my !== waitToken || mode === 'over') return;
+          Speech.say(L.repeat);
+          later(function () { if (my === waitToken && mode !== 'over') showHint(); }, WAIT_MS + 1500);
+        }, WAIT_MS);
+      });
+    }
+
+    function showHint() {
+      if (mode === 'first') { mode = 'hint'; log('prompted'); }
+      waitToken += 1;
+      targetBtn.classList.add('hint');
+      Speech.say(L.hint);
+      var my = waitToken;
+      later(function () {
+        if (my !== waitToken || mode === 'over') return;
+        mode = 'over';
+        Speech.say(L.word).then(function () { rc.done(false); });
+        later(function () { rc.done(false); }, 4000);
+      }, 9000);
+    }
+
+    function found(btn) {
+      mode = 'over';
+      waitToken += 1;
+      locked = true;
+      btn.classList.remove('hint');
+      btn.classList.add('right');
+      Object.keys(buttons).forEach(function (id) { if (buttons[id] !== btn) buttons[id].classList.add('fade'); });
+      animatePic(btn.querySelector('.pic'), w);
+      Sfx.correct();
+      Speech.say(L.correct).then(function () { rc.done(true); });
+      later(function () { rc.done(true); }, 6000);
+    }
+
+    function tap(id, btn) {
+      if (locked || mode === 'over' || !accept()) return;
+      if (id === w.id) {
+        if (mode === 'first') log('correct');
+        if (mode === 'correction') P.recordCorrection(state, w.id, true);
+        found(btn);
+        return;
+      }
+      // Wrong picture: no sound effect, no animation on it.
+      if (mode === 'hint') {
+        targetBtn.classList.remove('hint');
+        void targetBtn.offsetWidth;
+        targetBtn.classList.add('hint');
+        Speech.say(L.hint);
+        return;
+      }
+      if (mode === 'correction') {
+        // Second miss: show the answer calmly and move on.
+        mode = 'over';
+        waitToken += 1;
+        locked = true;
+        btn.classList.add('dim');
+        targetBtn.classList.add('hint');
+        Speech.say(L.thisIs).then(function () { rc.done(false, 1200); });
+        later(function () { rc.done(false); }, 5000);
+        return;
+      }
+      log('error');
+      mode = 'look';
+      waitToken += 1;
+      locked = true;
+      btn.classList.add('dim');
+      Speech.say(L.look).then(function () {
+        if (!rc.alive()) return null;
+        targetBtn.classList.add('hint');
+        return Speech.say(L.thisIs);
+      }).then(function () {
+        if (!rc.alive()) return;
+        later(correction, 700);
+      });
+    }
+
+    // Do-over: same word, pictures in new places (research: correction trial).
+    function correction() {
+      if (!rc.alive()) return;
+      mode = 'correction';
+      var newPos = P.placeTarget(field, Array.prototype.indexOf.call(grid.children, targetBtn), Math.random);
+      build(newPos);
+      grid.classList.remove('reshow');
+      void grid.offsetWidth;
+      grid.classList.add('reshow');
+      ask(L.prompt);
+    }
+
+    session.repeat = function () { if (mode !== 'over' && !locked) Speech.say(L.prompt); };
+    later(function () { ask(L.prompt); }, LOOK_MS);
   }
 
   /* ------------------------------------------------------------------ */
-  /* Reward: pick a present                                              */
+  /* Reward, then carryover ideas for the grown-up                       */
   /* ------------------------------------------------------------------ */
 
+  // How to use a word away from the screen.
+  function realLife(w) {
+    if (w.life) return w.life;
+    var l = label(w);
+    if (w.personal) return 'Point to ' + CHILD + ' in a mirror and say "' + l + '!"';
+    if (w.kind === 'name') return 'When ' + l + ' comes in, point and say "' + cap(l) + '!"';
+    if (w.cat === 'body') return 'Touch your ' + l + ' and say "' + l + '!", then touch ' + CHILD + '\'s.';
+    var plural = w.kind === 'plural';
+    return 'Find the real ' + l + '. Hold ' + (plural ? 'them' : 'it') + ' up, say "' + l + '!", and let ' + CHILD + ' touch ' + (plural ? 'them' : 'it') + '.';
+  }
+
   SCREENS.reward = function () {
-    var played = session ? session.words.slice() : [];
+    var played = session ? session.words.filter(function (id) { return D.byId[id] && !D.byId[id].everyday; }) : [];
     session = null;
-    var name = state.settings.childName;
-    var title = h('h2', { class: 'big-title', text: 'You did it!' });
-    var pip = mascot('happy');
+    var title = h('h2', { class: 'big-title', text: 'You did it, ' + CHILD + '!' });
+    var guide = mascot('happy');
     var hint = h('p', { class: 'prize-name', text: 'Pick a present!' });
     var gifts = h('div', { class: 'gifts' });
-    var actions = h('div', { class: 'reward-actions' });
+    var after = h('div', { class: 'reward-after' });
     var picked = false;
 
     for (var i = 0; i < 3; i++) {
@@ -795,34 +1063,75 @@
         gifts.replaceWith(prize);
         hint.textContent = cap(st.name) + '!';
         Sfx.tada();
-        FX.fromEl(prize, 80);
+        FX.fromEl(prize, 60);
         cheerMascot();
-        Speech.say(['You got ' + article(st.name) + ' ' + st.name + '!']);
-        prize.addEventListener('click', function () {
-          Sfx.boing();
-          FX.fromEl(prize, 30);
-          Speech.say([cap(st.name) + '!']);
-        });
-        actions.appendChild(h('button', { class: 'btn green', onclick: function () { Sfx.pop(); startSession('mix'); } },
-          h('span', { html: PLAY_SVG, style: 'width:26px;height:26px;display:inline-flex' }), 'Again'));
-        actions.appendChild(h('button', { class: 'btn white', onclick: function () { Sfx.tap(); go('home'); } },
-          h('img', { src: 'img/ui/house.png', alt: '' }), 'Home'));
-        actions.appendChild(h('button', { class: 'btn pink', onclick: function () { Sfx.tap(); go('stickers'); } },
-          h('img', { src: 'img/ui/star.png', alt: '' }), 'Stickers'));
+        Speech.say([shared('got-' + st.id)]);
+        after.appendChild(carryover(played));
       }, 1000);
     }
 
-    var strip = h('div', { class: 'practiced', 'aria-label': 'Words practiced' });
-    played.forEach(function (id) {
-      var w = D.byId[id];
-      if (w) strip.appendChild(h('img', { src: imgPath(w), alt: label(w) }));
-    });
-
-    app.appendChild(h('div', { class: 'reward' }, title, pip, hint, gifts, actions, strip));
+    app.appendChild(h('div', { class: 'reward' }, title, guide, hint, gifts, after));
     Sfx.tada();
-    FX.rain(180);
+    FX.rain(120);
     later(cheerMascot, 200);
-    Speech.say([name ? 'Yay, ' + name + '! You did it!' : 'Yay! You did it!', { pause: 250 }, 'Pick a present!']);
+    Speech.say([shared('did-it-name'), { pause: 250 }, shared('present')]);
+  };
+
+  // Research: help the child use the words off the screen.
+  function carryover(ids) {
+    var words = ids.map(function (id) { return D.byId[id]; }).slice(0, 5);
+    var list = h('ul', { class: 'carry-list' });
+    words.forEach(function (w) {
+      list.appendChild(h('li', {}, h('div', { class: 'thumb' }, picture(w)), h('div', {}, h('b', { text: label(w) + ': ' }), realLife(w))));
+    });
+    return h('div', { class: 'panel carry' },
+      h('h3', { text: 'For grown-ups: today\'s words' }),
+      h('p', { text: 'Find the real things and say each word three times today, at bath, meals and play.' }),
+      list,
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn purple small', onclick: function () { go('real', ids); } }, 'Real things'),
+        h('button', { class: 'btn white small', onclick: function () { go('home'); } }, 'Home'),
+        h('button', { class: 'btn pink small', onclick: function () { go('stickers'); } }, 'Stickers')));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Real things: bridge from picture to object                          */
+  /* ------------------------------------------------------------------ */
+
+  SCREENS.real = function (ids) {
+    var list = (ids && ids.length ? ids : PICTURE_WORDS.filter(function (w) {
+      var s = P.stateOf(state, w.id);
+      return available(w.id) && (s === 'learning' || s === 'review');
+    }).map(function (w) { return w.id; })).map(function (id) { return D.byId[id]; });
+    if (!list.length) list = PICTURE_WORDS.filter(function (w) { return available(w.id); }).slice(0, 6);
+    var i = 0;
+    var counter = h('div', { class: 'screen-title', style: 'font-size:22px' });
+    var body = h('div', { class: 'stage' });
+    app.appendChild(topbar(homeButton(), counter, spacer()));
+    app.appendChild(body);
+
+    function show() {
+      var w = list[i];
+      var L = speech(w);
+      counter.textContent = 'Real things ' + (i + 1) + ' / ' + list.length;
+      body.innerHTML = '';
+      var pic = picture(w);
+      var card = h('button', { class: 'card big-card', style: '--cc:' + D.catById[w.cat].color, 'aria-label': label(w) },
+        pic, h('div', { class: 'word-label', text: label(w) }));
+      card.addEventListener('click', function () { Sfx.pop(); animatePic(pic, w); Speech.say(L.word); });
+      var prev = h('button', { class: 'arrow-btn', 'aria-label': 'Previous', html: arrowSvg('left', '#26264A') });
+      var next = h('button', { class: 'arrow-btn', 'aria-label': 'Next', html: arrowSvg('right', '#26264A') });
+      prev.addEventListener('click', function () { Sfx.whoosh(); i = (i - 1 + list.length) % list.length; show(); });
+      next.addEventListener('click', function () { Sfx.whoosh(); i = (i + 1) % list.length; show(); });
+      var note = w.kind === 'name' || w.cat === 'body' ? realLife(w)
+        : 'Hold up a real ' + label(w) + ' next to the picture. Say "' + label(w) + '!" and let ' + CHILD + ' touch the real one.';
+      body.appendChild(h('div', { class: 'real-note' }, h('b', { text: 'Grown-ups: ' }), note));
+      body.appendChild(h('div', { class: 'stage-main' }, h('div', { class: 'viewer-row' }, prev, card, next)));
+      P.recordExposure(state, w.id, Date.now());
+      save();
+      Speech.say(L.word.concat([{ pause: 300 }], L.phrase));
+    }
+    show();
   };
 
   /* ------------------------------------------------------------------ */
@@ -846,24 +1155,21 @@
         c.classList.add('on');
         renderGrid();
         scroller.scrollTop = 0;
-        if (id !== 'all') Speech.say([name]);
+        if (id !== 'all') Speech.say([shared('cat-' + id)]);
       });
       return c;
     }
     chips.appendChild(chip('all', 'All', '#26264A', 'img/ui/star.png'));
-    D.CATEGORIES.forEach(function (c) { chips.appendChild(chip(c.id, c.name, c.color, imgPath(D.byId[c.icon]))); });
+    D.CATEGORIES.forEach(function (c) { chips.appendChild(chip(c.id, c.name, c.color, iconSrc(D.byId[c.icon]))); });
 
     function renderGrid() {
       grid.innerHTML = '';
-      var list = WORDS.filter(function (w) { return wordsCat === 'all' || w.cat === wordsCat; });
-      list.forEach(function (w, i) {
+      var list = D.WORDS.filter(function (w) { return wordsCat === 'all' || w.cat === wordsCat; });
+      list.forEach(function (w, idx) {
         var cat = D.catById[w.cat];
-        var lv = P.level(P.peek(state, w.id));
         var tile = h('button', { class: 'tile', style: '--cc:' + cat.color, 'aria-label': label(w) },
-          picture(w),
-          h('div', { class: 'name', text: label(w) }),
-          h('div', { class: 'mini-stars', title: starsTitle(lv), html: starsHTML(lv) }));
-        tile.addEventListener('click', function () { Sfx.pop(); openViewer(list, i, renderGrid); });
+          picture(w), h('div', { class: 'name', text: label(w) }));
+        tile.addEventListener('click', function () { Sfx.pop(); openViewer(list, idx); });
         grid.appendChild(tile);
       });
     }
@@ -874,8 +1180,8 @@
     app.appendChild(scroller);
   };
 
-  // Full-screen talking picture, swipe or use arrows to flip through.
-  function openViewer(list, index, onClose) {
+  // Full-screen talking picture; arrows (or a swipe) flip through.
+  function openViewer(list, index) {
     var i = index;
     var ov = h('div', { class: 'overlay', role: 'dialog', 'aria-label': 'Word' });
     var close = h('button', { class: 'icon-btn', 'aria-label': 'Close', html: CLOSE_SVG });
@@ -886,12 +1192,7 @@
     app.appendChild(ov);
     var token = 0;
 
-    close.addEventListener('click', function () {
-      Sfx.tap();
-      Speech.stop();
-      ov.remove();
-      if (onClose) onClose();
-    });
+    close.addEventListener('click', function () { Sfx.tap(); Speech.stop(); ov.remove(); });
 
     function show(dir) {
       token += 1;
@@ -900,31 +1201,29 @@
       counter.textContent = (i + 1) + ' / ' + list.length;
       body.innerHTML = '';
       var phrase = fill(w.phrase, w);
-      var pip = mascot();
-      var bubble = h('div', { class: 'bubble', text: phrase });
-      var card = bigCard(w);
-      var pic = card.querySelector('.pic');
+      var pic = picture(w);
+      var card = h('button', { class: 'card big-card', style: '--cc:' + D.catById[w.cat].color, 'aria-label': label(w) },
+        pic, h('div', { class: 'word-label', text: label(w) }));
+      var word = [wordClip(w)];
+      card.addEventListener('click', function () { Sfx.pop(); animatePic(pic, w); Speech.say(word); });
       var prev = h('button', { class: 'arrow-btn', 'aria-label': 'Previous', html: arrowSvg('left', '#26264A') });
       var next = h('button', { class: 'arrow-btn', 'aria-label': 'Next', html: arrowSvg('right', '#26264A') });
       prev.addEventListener('click', function () { Sfx.whoosh(); i = (i - 1 + list.length) % list.length; show(-1); });
       next.addEventListener('click', function () { Sfx.whoosh(); i = (i + 1) % list.length; show(1); });
-      body.appendChild(h('div', { class: 'talk-row' }, pip, bubble));
+      body.appendChild(h('div', { class: 'talk-row' }, mascot(), h('div', { class: 'bubble', text: phrase })));
       body.appendChild(h('div', { class: 'stage-main' }, h('div', { class: 'viewer-row' }, prev, card, next)));
       if (dir) {
         body.classList.remove('enter');
         void body.offsetWidth;
         body.classList.add('enter');
       }
-      P.recordExposure(state, w.id, Date.now());
-      save();
-      var anim = { run: function () { if (my === token) animatePic(pic, w); } };
+      if (!w.everyday) { P.recordExposure(state, w.id, Date.now()); save(); }
       setTimeout(function () {
         if (my !== token || !ov.parentNode) return;
-        Speech.say([anim, wordPart(w, 0.8), { pause: 350 }, phrase, { pause: 300 }, anim, wordPart(w, 0.8)]);
+        Speech.say(word.concat([{ pause: 350 }, phraseClip(w), { pause: 300 }], word));
       }, 250);
     }
 
-    // Swipe left / right on the picture area.
     var sx = null;
     var sy = null;
     body.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
@@ -956,28 +1255,19 @@
       var el = h('button', { class: 'sticker' + (n ? '' : ' missing'), 'aria-label': n ? s.name : 'Mystery sticker' },
         img, n > 1 ? h('span', { class: 'count', text: 'x' + n }) : null);
       el.addEventListener('click', function () {
-        if (!n) {
-          Sfx.soft();
-          Speech.say(['Play to find more stickers!']);
-          return;
-        }
+        if (!n) { Speech.say([shared('more-stickers')]); return; }
         Sfx.boing();
         el.classList.remove('anim-wiggle');
         void el.offsetWidth;
         el.classList.add('anim-wiggle');
-        FX.fromEl(el, 18);
-        Speech.say([cap(s.name) + '!']);
+        Speech.say([shared('name-' + s.id)]);
       });
       grid.appendChild(el);
     });
     app.appendChild(topbar(homeButton(), h('h1', { class: 'screen-title', text: 'My Stickers' }),
       h('div', { class: 'sticker-count' }, have + '/' + D.STICKERS.length)));
     app.appendChild(h('div', { class: 'scroll' }, grid));
-    if (audioReady) {
-      later(function () {
-        Speech.say([have ? 'Look at all your stickers!' : 'Play to win stickers!']);
-      }, 300);
-    }
+    if (have && audioReady) later(function () { Speech.say([shared('stickers-name')]); }, 400);
   };
 
   /* ------------------------------------------------------------------ */
@@ -991,8 +1281,7 @@
     if (tab) parentTab = tab;
     var body = h('div', { class: 'parent-body' });
     var tabs = h('div', { class: 'tabs', role: 'tablist' });
-    var TABS = [['progress', 'Progress'], ['words', 'Words'], ['settings', 'Settings'], ['help', 'Help']];
-    TABS.forEach(function (t) {
+    [['progress', 'Progress'], ['words', 'Words'], ['settings', 'Settings'], ['help', 'Help']].forEach(function (t) {
       tabs.appendChild(h('button', {
         class: 'tab' + (parentTab === t[0] ? ' on' : ''), role: 'tab',
         onclick: function () { parentTab = t[0]; go('parent'); }
@@ -1005,7 +1294,6 @@
     ({ progress: progressTab, words: wordsTab, settings: settingsTab, help: helpTab })[parentTab](body);
   };
 
-  // Redraw the grown-ups screen without losing the scroll position.
   function rerenderParent() {
     var body = app.querySelector('.parent-body');
     var y = body ? body.scrollTop : 0;
@@ -1036,23 +1324,64 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   }
 
+  var STAGE_COLORS = { new: '#8A94A6', learning: '#2F7BFF', review: '#FF8A00', mastered: '#22C55E' };
+  function stageChip(st) {
+    var text = st.known ? 'Already knows' : (st.state === 'learning' ? 'Learning · ' + P.fieldSize(st.level) + ' pictures' : cap(st.state));
+    return h('span', { class: 'stage-chip', style: '--sc:' + STAGE_COLORS[st.state], text: text });
+  }
+
+  function reportExtra(w) {
+    return { label: label(w), exemplars: exemplarsFor(w).length, notes: customOf(w.id).notes || '' };
+  }
+
+  function printReport() {
+    var rows = P.reportRows(state, PICTURE_WORDS.filter(function (w) { return available(w.id); }), D.catById, reportExtra);
+    var table = h('table');
+    rows.forEach(function (r, i) {
+      var tr = h('tr');
+      r.forEach(function (c) { tr.appendChild(h(i ? 'td' : 'th', { text: String(c) })); });
+      table.appendChild(tr);
+    });
+    var sum = P.summary(state, PICTURE_WORDS);
+    var div = h('div', { id: 'print-report' },
+      h('h1', { text: 'Word Wizard progress report' }),
+      h('p', { text: CHILD + ' · ' + new Date().toLocaleDateString() +
+        ' · Mastered ' + sum.mastered + ', review ' + sum.review + ', learning ' + sum.learning + ' of ' + sum.total + ' picture words' }),
+      h('p', { text: '"Correct (no hint)" counts only the child\'s first tap with no help. Pictures shown = how many pictures the child chooses from (2-4).' }),
+      table);
+    document.body.appendChild(div);
+    var cleanup = function () { if (div.parentNode) div.remove(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(function () { window.print(); }, 50);
+  }
+
   function progressTab(body) {
-    var sum = P.summary(state, WORDS);
+    var sum = P.summary(state, PICTURE_WORDS);
     var now = Date.now();
     var tip = installTip();
     if (tip) body.appendChild(pCard(null, tip));
 
-    body.appendChild(pCard('Words mastered',
-      h('div', { class: 'hero-num', html: sum.mastered + ' <small>of ' + sum.total + '</small>' }),
+    body.appendChild(pCard('Picture words',
+      h('div', { class: 'hero-num', html: sum.mastered + ' <small>of ' + sum.total + ' mastered</small>' }),
       h('div', { class: 'bar' }, h('i', { style: 'width:' + Math.round(sum.mastered / sum.total * 100) + '%' })),
-      h('p', { class: 'p-muted', text: 'Mastered = hears the word and picks the right picture from 3 or 4 choices on ' + P.MASTER_DAYS + ' different days, getting 4 of the last 5 right.' }),
       h('div', { class: 'stat-tiles' },
-        h('div', { class: 'stat-tile', style: '--tc:' + STAR_COLORS.fromTwo }, h('b', { text: String(sum.fromTwo) }), h('span', { text: 'Picks from 2' })),
-        h('div', { class: 'stat-tile', style: '--tc:' + STAR_COLORS.fromMany }, h('b', { text: String(sum.fromMany) }), h('span', { text: 'Picks from 3-4' })),
-        h('div', { class: 'stat-tile', style: '--tc:' + STAR_COLORS.mastered }, h('b', { text: String(sum.mastered) }), h('span', { text: 'Mastered' })))
-    ));
+        h('div', { class: 'stat-tile', style: '--tc:' + STAGE_COLORS.learning }, h('b', { text: String(sum.learning) }), h('span', { text: 'Learning' })),
+        h('div', { class: 'stat-tile', style: '--tc:' + STAGE_COLORS.review }, h('b', { text: String(sum.review) }), h('span', { text: 'Review' })),
+        h('div', { class: 'stat-tile', style: '--tc:' + STAGE_COLORS.mastered }, h('b', { text: String(sum.mastered) }), h('span', { text: 'Mastered' }))),
+      h('p', { class: 'p-muted', text: 'Mastered = found with no hint among 4 pictures on 2 days, then again 2 and 7 days later with different pictures. See Help for details.' })));
 
-    // Last 7 days
+    var chips = h('div', { class: 'focus-chips' });
+    PICTURE_WORDS.forEach(function (w) {
+      var st = P.peek(state, w.id);
+      if (st.state !== 'learning' && st.state !== 'review') return;
+      chips.appendChild(h('div', { class: 'focus-chip' }, h('div', { class: 'chip-pic' }, picture(w)), label(w),
+        h('span', { class: 'badge-level', text: st.state === 'review' ? 'review' : P.fieldSize(st.level) + ' pics' })));
+    });
+    body.appendChild(pCard('Learning now', chips.children.length ? chips : h('p', { class: 'p-muted', text: 'Words join when you press Play.' }),
+      h('p', { class: 'p-muted', text: 'New words join 1 or 2 at a time, only while ' + state.settings.learningCap + ' or fewer are being learned.' }),
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn purple small', onclick: function () { parentTab = 'words'; wordFilter = 'learning'; go('parent'); } }, 'Choose words'))));
+
+    // This week
     var week = h('div', { class: 'week' });
     var max = 1;
     var days = [];
@@ -1060,79 +1389,67 @@
       var dt = new Date(now);
       dt.setDate(dt.getDate() - d);
       var log = state.days[P.dayKey(dt.getTime())];
-      var rounds = log ? log.rounds : 0;
-      max = Math.max(max, rounds);
-      days.push({ label: 'SMTWTFS'.charAt(dt.getDay()), rounds: rounds });
+      var n = log ? log.trials : 0;
+      max = Math.max(max, n);
+      days.push({ label: 'SMTWTFS'.charAt(dt.getDay()), n: n });
     }
     days.forEach(function (dd) {
       week.appendChild(h('div', {},
-        h('em', { text: dd.rounds ? String(dd.rounds) : '' }),
-        h('i', { class: dd.rounds ? '' : 'zero', style: 'height:' + Math.max(4, Math.round(dd.rounds / max * 80)) + 'px' }),
+        h('em', { text: dd.n ? String(dd.n) : '' }),
+        h('i', { class: dd.n ? '' : 'zero', style: 'height:' + Math.max(4, Math.round(dd.n / max * 80)) + 'px' }),
         h('span', { text: dd.label })));
     });
     var today = state.days[P.dayKey(now)];
-    var streak = P.streak(state, now);
-    var todayText = null;
-    if (today && today.rounds) {
-      todayText = 'Today: ' + today.rounds + ' pictures to find, ' + today.correct + ' right on the first try (' +
-        Math.round(today.correct / today.rounds * 100) + '%), about ' + Math.max(1, Math.round(today.seconds / 60)) + ' min.';
-    }
-    body.appendChild(pCard('Practice',
-      h('p', { text: streak ? streak + '-day streak. Keep it going!' : 'No practice yet today. A few minutes counts!' }),
-      todayText ? h('p', { class: 'p-muted', text: todayText }) : null,
+    var todayText = today && today.trials
+      ? 'Today: about ' + Math.max(1, Math.round(today.seconds / 60)) + ' min, ' + today.trials + ' pictures, ' +
+        Math.round(today.correct / today.trials * 100) + '% found with no hint.'
+      : 'Not played yet today.';
+    body.appendChild(pCard('This week',
+      h('p', { text: 'Played on ' + P.daysPracticed(state, now, 7) + ' of the last 7 days. ' + todayText }),
       week,
-      h('p', { class: 'p-muted', text: 'Pictures found each day this week.' })));
+      h('p', { class: 'p-muted', text: 'Pictures to find each day. Spreading short sessions across days helps words stick better than one long session.' }),
+      h('p', { class: 'p-muted', text: 'Screen time: health guidance for 2-year-olds is no more than 1 hour a day (less is better), used together. Each session stops after ' + state.settings.maxMinutes + ' minutes.' })));
 
-    // Learning now
-    P.refreshFocus(state, D.START_ORDER);
-    save();
-    var chips = h('div', { class: 'focus-chips' });
-    state.focus.forEach(function (id) {
-      var w = D.byId[id];
-      chips.appendChild(h('div', { class: 'focus-chip' }, h('img', { src: imgPath(w), alt: '' }), label(w)));
-    });
-    body.appendChild(pCard('Learning now', chips,
-      h('p', { class: 'p-muted', text: 'Play practices these words most. When one is mastered, the next word joins automatically, and mastered words come back for quick checks.' }),
-      h('div', { class: 'btn-row' }, h('button', { class: 'btn purple small', onclick: function () { parentTab = 'words'; wordFilter = 'focus'; go('parent'); } }, 'Choose words'))));
-
-    // Categories
     var cats = pCard('By category');
-    D.CATEGORIES.forEach(function (c) {
-      var bc = sum.byCat[c.id] || { total: 0, stars: 0, mastered: 0 };
+    D.CATEGORIES.filter(function (c) { return !c.everyday; }).forEach(function (c) {
+      var bc = sum.byCat[c.id] || { total: 0, mastered: 0, started: 0 };
       cats.appendChild(h('div', { class: 'cat-row' },
-        h('img', { src: imgPath(D.byId[c.icon]), alt: '' }),
+        h('img', { src: iconSrc(D.byId[c.icon]), alt: '' }),
         h('span', { class: 'name', text: c.name }),
-        h('div', { class: 'bar cat', style: '--cc:' + c.color }, h('i', { style: 'width:' + Math.round(bc.stars / (bc.total * 3) * 100) + '%' })),
+        h('div', { class: 'bar cat', style: '--cc:' + c.color }, h('i', { style: 'width:' + Math.round(bc.mastered / bc.total * 100) + '%' })),
         h('span', { class: 'n', text: bc.mastered + '/' + bc.total })));
     });
     body.appendChild(cats);
 
-    body.appendChild(pCard('Share with your speech therapist',
-      h('p', { text: 'Send a spreadsheet of every word: how often your child picks the right picture, recent accuracy, and which words are mastered.' }),
-      h('div', { class: 'btn-row' }, h('button', {
-        class: 'btn blue small',
-        onclick: function () {
-          shareFile('word-buddies-report-' + P.dayKey(Date.now()) + '.csv', P.reportCSV(state, WORDS, D.catById, label), 'text/csv');
-        }
-      }, 'Share report'))));
+    body.appendChild(pCard('Report for your speech therapist',
+      h('p', { text: 'Every word with trials, % found with no hint vs. with a hint, pictures shown, how many different pictures were used, dates introduced and mastered, and your notes.' }),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn blue small', onclick: function () {
+          shareFile('word-wizard-report-' + P.dayKey(Date.now()) + '.csv',
+            P.reportCSV(state, PICTURE_WORDS.filter(function (w) { return available(w.id); }), D.catById, reportExtra), 'text/csv');
+        } }, 'Share spreadsheet'),
+        h('button', { class: 'btn white small', onclick: printReport }, 'Print or save PDF'))));
   }
 
   function wordStatsText(w) {
     var st = P.peek(state, w.id);
-    var lv = P.level(st);
-    if (st.known) return 'Already understood this word';
+    if (w.personal && !hasPhoto(w)) return 'Add a photo of ' + CHILD + ' to use this word';
     var bits = [];
-    if (lv.mastered) bits.push('Mastered');
-    if (st.findTries) bits.push('Right first try ' + st.findOk + '/' + st.findTries);
-    if (!lv.mastered && st.winDays.length) bits.push('Mastery days ' + Math.min(st.winDays.length, P.MASTER_DAYS) + '/' + P.MASTER_DAYS);
-    if (!st.findTries) bits.push(st.seen ? 'Heard ' + st.seen + 'x' : 'Not started');
-    return bits.join(' · ');
+    if (st.trials) bits.push('No hint ' + st.correct + '/' + st.trials + ' (' + Math.round(st.correct / st.trials * 100) + '%)');
+    if (st.prompted) bits.push('hint ' + st.prompted);
+    var photos = photoKeys(w).length;
+    if (photos) bits.push(photos + (photos === 1 ? ' photo' : ' photos'));
+    if (P.isPaused(state, w.id)) bits.push('paused');
+    return bits.join(' · ') || 'Not started';
   }
 
   function wordsTab(body) {
-    P.refreshFocus(state, D.START_ORDER);
-    save();
-    var filters = [['all', 'All 50'], ['focus', 'Learning now'], ['mastered', 'Mastered'], ['new', 'Not started']];
+    body.appendChild(pCard('Photos of ' + CHILD + '\'s world',
+      h('p', { text: 'Every word comes with real photos. Photos of ' + CHILD + '\'s own things and people are even better: they help words carry over to real life.' }),
+      h('p', { class: 'p-muted', text: 'Tap the pencil on a word to add up to ' + MAX_PHOTOS + ' photos. For Mommy, Daddy and baby, your photos replace the stock ones. ' +
+        'Words with your photos: ' + photoWordCount() + '.' })));
+
+    var filters = [['all', 'All'], ['learning', 'Learning'], ['review', 'Review'], ['mastered', 'Mastered'], ['new', 'Not started']];
     var row = h('div', { class: 'filter-row' });
     filters.forEach(function (f) {
       row.appendChild(h('button', {
@@ -1141,57 +1458,63 @@
       }, f[1]));
     });
     body.appendChild(row);
-    body.appendChild(h('p', { class: 'p-muted', style: 'margin:0 0 10px', text: 'Tap the pencil to rename a word ("Mama"), record your own voice, or use a real photo. Stars: blue = picks it from 2 pictures, orange = from 3 or 4, green = mastered.' }));
 
-    D.CATEGORIES.forEach(function (c) {
-      var list = WORDS.filter(function (w) {
-        if (w.cat !== c.id) return false;
-        var lv = P.level(P.peek(state, w.id));
-        if (wordFilter === 'focus') return state.focus.indexOf(w.id) !== -1;
-        if (wordFilter === 'mastered') return lv.mastered;
-        if (wordFilter === 'new') return lv.stage === 'new';
-        return true;
+    D.CATEGORIES.filter(function (c) { return !c.everyday; }).forEach(function (c) {
+      var list = PICTURE_WORDS.filter(function (w) {
+        return w.cat === c.id && (wordFilter === 'all' || P.stateOf(state, w.id) === wordFilter);
       });
       if (!list.length) return;
       var card = pCard(c.name);
       list.forEach(function (w) {
-        var lv = P.level(P.peek(state, w.id));
-        var inFocus = state.focus.indexOf(w.id) !== -1;
-        var focusBtn = null;
-        if (lv.mastered) {
-          focusBtn = h('span', { class: 'pill-btn on', text: 'Mastered' });
-        } else {
-          focusBtn = h('button', {
-            class: 'pill-btn' + (inFocus ? ' on' : ''),
-            onclick: function () {
-              if (inFocus) P.removeFocus(state, w.id);
-              else P.addFocus(state, w.id);
-              save();
-              rerenderParent();
-            }
-          }, inFocus ? 'Learning ✓' : 'Learn now');
+        var st = P.peek(state, w.id);
+        var action = null;
+        if (!available(w.id)) action = null;
+        else if (st.state === 'new') {
+          action = h('button', { class: 'pill-btn', onclick: function () { P.introduce(state, w.id, Date.now()); save(); rerenderParent(); } }, 'Start');
+        } else if (st.state === 'learning' || st.state === 'review') {
+          var paused = P.isPaused(state, w.id);
+          action = h('button', { class: 'pill-btn' + (paused ? '' : ' on'), onclick: function () {
+            if (paused) P.unpause(state, w.id); else P.pause(state, w.id);
+            save();
+            rerenderParent();
+          } }, paused ? 'Resume' : 'Pause');
         }
         card.appendChild(h('div', { class: 'word-row' },
           h('div', { class: 'thumb' }, picture(w)),
           h('div', { class: 'info' },
-            h('b', { text: label(w) }),
-            h('span', { class: 'stars3', title: starsTitle(lv), html: starsHTML(lv) }),
+            h('b', { text: label(w) }), ' ', stageChip(st),
             h('div', { class: 'p-muted', text: wordStatsText(w) })),
-          focusBtn,
+          action,
           h('button', { class: 'edit-btn', 'aria-label': 'Customize ' + label(w), html: PENCIL_SVG, onclick: function () { openCustomize(w); } })));
       });
       body.appendChild(card);
     });
+
+    if (wordFilter === 'all') {
+      var every = pCard('Everyday words: practice in daily routines',
+        h('p', { class: 'p-muted', text: 'Words like "up", "more" and "all done" are hard to show in a picture, so the game doesn\'t test them. They\'re learned best when you say them at the moment they happen.' }));
+      D.EVERYDAY_WORDS.forEach(function (w) {
+        every.appendChild(h('div', { class: 'word-row' },
+          h('div', { class: 'thumb' }, picture(w)),
+          h('div', { class: 'info' }, h('b', { text: w.word }),
+            h('div', { class: 'p-muted wrap', text: w.life + (w.sign ? ' Baby sign: ' + w.sign : '') }))));
+      });
+      body.appendChild(every);
+    }
   }
 
-  // How to practice understanding a word away from the screen.
-  function realLife(w) {
-    if (w.life) return w.life;
-    var l = label(w);
-    var plural = w.kind === 'plural';
-    if (w.cat === 'body') return 'Ask "' + (plural ? 'Where are your ' : 'Where\'s your ') + l + '?" and touch ' + (plural ? 'them' : 'it') + ' together. Soon your child will show you.';
-    if (w.kind === 'name') return 'Ask "Where\'s ' + l + '?" and let your child look, point or go to them.';
-    return 'Ask "' + (plural ? 'Where are the ' : 'Where\'s the ') + l + '?" and let your child point to ' + (plural ? 'them' : 'it') + ' or bring ' + (plural ? 'them' : 'it') + ' to you.';
+  function sheet(titleText, onClose) {
+    var back = h('div', { class: 'sheet-back' });
+    var box = h('div', { class: 'sheet', role: 'dialog', 'aria-label': titleText });
+    back.appendChild(box);
+    var close = function () {
+      Speech.stop();
+      back.remove();
+      if (onClose) onClose();
+    };
+    back.addEventListener('click', function (e) { if (e.target === back) close(); });
+    app.appendChild(back);
+    return { box: box, close: close };
   }
 
   // Make a square, phone-friendly JPEG from a picked photo.
@@ -1215,158 +1538,92 @@
   }
 
   function openCustomize(w) {
-    var back = h('div', { class: 'sheet-back' });
-    var sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Customize ' + label(w) });
-    back.appendChild(sheet);
+    var sh = sheet('Customize ' + label(w), rerenderParent);
     var thumb = h('div', { class: 'thumb' });
     var title = h('h2');
-
     function refreshTop() {
       thumb.innerHTML = '';
       thumb.appendChild(picture(w));
       title.textContent = label(w);
     }
 
-    function closeSheet() {
-      Speech.stop();
-      A.Rec.stop();
-      back.remove();
-      rerenderParent();
-    }
-    back.addEventListener('click', function (e) { if (e.target === back) closeSheet(); });
+    var intro = h('p', { class: 'p-muted', text: w.personal
+      ? 'This word is ' + CHILD + '. Add a photo of him to include it in the game.'
+      : (w.look === 'person' ? 'Your photos replace the stock photos of this word.' : 'Your photos are shown first, then the built-in photos.') });
 
-    var nameInput = h('input', { type: 'text', value: customOf(w.id).label || '', placeholder: w.word, maxlength: '24', autocomplete: 'off' });
-    nameInput.addEventListener('input', function () {
-      var v = nameInput.value.trim();
-      var c = editCustom(w.id);
-      if (v) c.label = v; else delete c.label;
-      save();
-      title.textContent = label(w);
-    });
-
-    // Voice recording
-    var recStatus = h('p', { class: 'p-muted' });
-    var recRow = h('div', { class: 'btn-row' });
-    function renderRec() {
-      recRow.innerHTML = '';
-      recStatus.textContent = hasRec(w) ? 'Using your recording.' : 'Using the app voice.';
-      if (!A.Rec.supported()) {
-        recStatus.textContent = 'Recording isn\'t available in this browser. On iPhone, open Word Buddies in Safari.';
-        return;
-      }
-      var recBtn = h('button', { class: 'btn red small' }, h('span', { class: 'rec-dot' }), hasRec(w) ? 'Record again' : 'Record');
-      recBtn.addEventListener('click', function () {
-        recBtn.disabled = true;
-        recRow.classList.add('recording');
-        recStatus.textContent = 'Recording... say "' + label(w) + '" clearly.';
-        A.unlock();
-        A.Rec.start(2500).then(function (blob) {
-          recRow.classList.remove('recording');
-          if (!blob || !blob.size) throw new Error('empty');
-          return S.putMedia('rec:' + w.id, blob);
-        }).then(function () {
-          editCustom(w.id).rec = true;
-          Speech.forgetRecording(w.id);
-          save();
-          renderRec();
-          Speech.say([wordPart(w)]);
-        }).catch(function () {
-          recRow.classList.remove('recording');
-          recStatus.textContent = 'Couldn\'t record. Check that the microphone is allowed for this app in Settings.';
-          recBtn.disabled = false;
-        });
-      });
-      recRow.appendChild(recBtn);
-      recRow.appendChild(h('button', { class: 'btn white small', onclick: function () { A.unlock(); Speech.say([wordPart(w)]); } }, 'Play'));
-      if (hasRec(w)) {
-        recRow.appendChild(h('button', {
-          class: 'btn white small',
-          onclick: function () {
-            S.deleteMedia('rec:' + w.id);
-            delete editCustom(w.id).rec;
-            Speech.forgetRecording(w.id);
-            save();
-            renderRec();
-          }
-        }, 'Use app voice'));
-      }
-    }
-
-    // Photo
+    // Photos (several per word)
+    var photoGrid = h('div', { class: 'photo-grid' });
     var fileInput = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
-    var photoRow = h('div', { class: 'btn-row' });
     var photoStatus = h('p', { class: 'p-muted' });
+    function renderPhotos() {
+      photoGrid.innerHTML = '';
+      photoKeys(w).forEach(function (key) {
+        var cell = h('div', { class: 'photo-cell' }, picture(w, { key: key, photo: key, style: 'photo' }));
+        cell.appendChild(h('button', { class: 'photo-remove', 'aria-label': 'Remove photo', text: '×', onclick: function () {
+          S.deleteMedia(key);
+          var c = editCustom(w.id);
+          if (key === 'photo:' + w.id) delete c.photo;
+          else c.photos = (c.photos || []).filter(function (n) { return 'photo:' + w.id + ':' + n !== key; });
+          save();
+          refreshTop();
+          renderPhotos();
+        } }));
+        photoGrid.appendChild(cell);
+      });
+      if (photoKeys(w).length < MAX_PHOTOS) {
+        photoGrid.appendChild(h('button', { class: 'photo-add', onclick: function () { fileInput.click(); } }, '+ Add photo'));
+      }
+      photoStatus.textContent = 'Use 2 or 3 photos of the real thing (' + CHILD + '\'s own ball, his cup, Grandma) on a plain background.';
+    }
     fileInput.addEventListener('change', function () {
       var f = fileInput.files && fileInput.files[0];
       if (!f) return;
       photoStatus.textContent = 'Saving photo...';
+      var n = String(Date.now());
       squarePhoto(f).then(function (blob) {
-        return S.putMedia('photo:' + w.id, blob);
+        return S.putMedia('photo:' + w.id + ':' + n, blob);
       }).then(function () {
-        editCustom(w.id).photo = true;
+        var c = editCustom(w.id);
+        c.photos = (c.photos || []).concat([n]);
         save();
         refreshTop();
-        renderPhoto();
-      }).catch(function () {
-        photoStatus.textContent = 'Couldn\'t use that photo. Try another one.';
-      });
+        renderPhotos();
+      }).catch(function () { photoStatus.textContent = 'Couldn\'t use that photo. Try another one.'; });
       fileInput.value = '';
     });
-    function renderPhoto() {
-      photoRow.innerHTML = '';
-      photoStatus.textContent = hasPhoto(w) ? 'Using your photo.' : 'Using the cartoon picture.';
-      photoRow.appendChild(h('button', { class: 'btn blue small', onclick: function () { fileInput.click(); } }, hasPhoto(w) ? 'Change photo' : 'Add a photo'));
-      if (hasPhoto(w)) {
-        photoRow.appendChild(h('button', {
-          class: 'btn white small',
-          onclick: function () {
-            S.deleteMedia('photo:' + w.id);
-            delete editCustom(w.id).photo;
-            save();
-            refreshTop();
-            renderPhoto();
-          }
-        }, 'Use cartoon'));
-      }
-    }
 
     var known = !!P.peek(state, w.id).known;
     var knownSwitch = h('button', { class: 'switch' + (known ? ' on' : ''), role: 'switch', 'aria-checked': known ? 'true' : 'false', 'aria-label': 'Already understands this word' });
     knownSwitch.addEventListener('click', function () {
       known = !known;
-      P.setKnown(state, w.id, known);
-      P.refreshFocus(state, D.START_ORDER);
+      P.setKnown(state, w.id, known, Date.now());
       save();
       knownSwitch.classList.toggle('on', known);
       knownSwitch.setAttribute('aria-checked', known ? 'true' : 'false');
     });
 
-    var tips = h('div', { class: 'tipbox' },
-      h('div', {}, h('b', { text: 'Say it in play: ' }), '"' + fill(w.phrase, w) + '"'),
-      h('div', {}, h('b', { text: 'Practice in real life: ' }), realLife(w)),
-      w.sign ? h('div', {}, h('b', { text: 'Baby sign: ' }), w.sign + ' Signing while you say the word helps connect word and meaning.') : null);
+    var notes = h('textarea', { class: 'notes', rows: '3', placeholder: 'e.g. Pointed to the real ball at the park. Said "ba".' });
+    notes.value = customOf(w.id).notes || '';
+    notes.addEventListener('input', function () { editCustom(w.id).notes = notes.value; save(); });
 
-    sheet.appendChild(h('div', { class: 'sheet-top' }, thumb, title,
-      h('button', { class: 'btn purple small', onclick: closeSheet }, 'Done')));
-    sheet.appendChild(h('label', { class: 'field' }, 'What your family calls it', nameInput));
-    sheet.appendChild(h('h3', { text: 'Your voice' }));
-    sheet.appendChild(h('p', { class: 'p-muted', text: 'Record yourself saying the word. Many children listen best to a familiar voice.' }));
-    sheet.appendChild(recRow);
-    sheet.appendChild(recStatus);
-    sheet.appendChild(h('h3', { text: 'Photo' }));
-    sheet.appendChild(h('p', { class: 'p-muted', text: 'Use a photo of your child\'s own cup, dog, or Grandma. Real photos help words carry over to real life.' }));
-    sheet.appendChild(photoRow);
-    sheet.appendChild(photoStatus);
-    sheet.appendChild(fileInput);
-    sheet.appendChild(h('div', { class: 'setting' },
-      h('div', { class: 'label' }, 'Already understands this word', h('small', { text: 'Counts it as mastered so practice time goes to new words. It still comes back for quick checks.' })),
-      knownSwitch));
-    sheet.appendChild(tips);
+    sh.box.appendChild(h('div', { class: 'sheet-top' }, thumb, title, h('button', { class: 'btn purple small', onclick: sh.close }, 'Done')));
+    sh.box.appendChild(intro);
+    sh.box.appendChild(h('h3', { text: 'Photos' }));
+    sh.box.appendChild(photoGrid);
+    sh.box.appendChild(photoStatus);
+    sh.box.appendChild(fileInput);
+    if (!w.personal) {
+      sh.box.appendChild(h('div', { class: 'setting' },
+        h('div', { class: 'label' }, 'Already understands this word', h('small', { text: 'Counts it as mastered so practice goes to new words. It still comes back for quick checks, and returns to learning if it\'s missed twice in a row.' })),
+        knownSwitch));
+    }
+    sh.box.appendChild(h('label', { class: 'field' }, 'Notes for you and your speech therapist', notes));
+    sh.box.appendChild(h('div', { class: 'tipbox' },
+      h('div', {}, h('b', { text: 'Say it in play: ' }), '"' + fill(w.phrase, w) + '"'),
+      h('div', {}, h('b', { text: 'Practice in real life: ' }), realLife(w))));
 
     refreshTop();
-    renderRec();
-    renderPhoto();
-    app.appendChild(back);
+    renderPhotos();
   }
 
   function segmented(options, value, onPick) {
@@ -1401,49 +1658,16 @@
   function settingsTab(body) {
     var st = state.settings;
 
-    var nameInput = h('input', { type: 'text', value: st.childName || '', placeholder: 'e.g. Sam', maxlength: '30', autocomplete: 'off', autocapitalize: 'words' });
-    nameInput.addEventListener('input', function () { st.childName = nameInput.value.trim(); save(); });
-    body.appendChild(pCard('Your child', h('label', { class: 'field' }, 'First name (used in cheers)', nameInput)));
-
     body.appendChild(pCard('Game',
-      setting('Words at a time', 'How many new words are practiced together. Fewer is easier.',
-        segmented([[3, '3'], [5, '5'], [7, '7']], st.activeSize, function (v) {
-          st.activeSize = v;
-          P.refreshFocus(state, D.START_ORDER);
-          save();
-        })),
-      setting('Play length', 'Rounds in one Play (about 3 to 6 minutes). Short and fun beats long.',
-        segmented([[6, '6'], [10, '10'], [15, '15']], st.sessionRounds, function (v) { st.sessionRounds = v; save(); })),
-      setting('Sound effects', null, toggle(st.sfx, function (on) { st.sfx = on; Sfx.enabled = on; save(); }))
+      setting('Words learning at once', 'New words only join while this many or fewer are being learned. 4 to 6 is recommended.',
+        segmented([[4, '4'], [5, '5'], [6, '6']], st.learningCap, function (v) { st.learningCap = v; save(); })),
+      setting('Pictures per session', 'About 10 to 20 is plenty for a 2-year-old.',
+        segmented([[10, '10'], [15, '15'], [20, '20']], st.sessionTrials, function (v) { st.sessionTrials = v; save(); })),
+      setting('Stop after', 'A session always ends at this time limit.',
+        segmented([[5, '5 min'], [10, '10 min']], st.maxMinutes, function (v) { st.maxMinutes = v; save(); })),
+      setting('Sound effects', null, toggle(st.sfx, function (on) { st.sfx = on; Sfx.enabled = on; save(); })),
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn blue small', onclick: function () { A.unlock(); Speech.say(['ball-where']); } }, 'Test sound'))
     ));
-
-    var voiceSelect = h('select');
-    function fillVoices() {
-      voiceSelect.innerHTML = '';
-      voiceSelect.appendChild(h('option', { value: '' }, 'Automatic (best available)'));
-      Speech.voices().forEach(function (v) {
-        var o = h('option', { value: v.voiceURI }, v.name + ' (' + v.lang + ')');
-        if (v.voiceURI === st.voiceURI) o.selected = true;
-        voiceSelect.appendChild(o);
-      });
-    }
-    fillVoices();
-    if (window.speechSynthesis && window.speechSynthesis.addEventListener) {
-      window.speechSynthesis.addEventListener('voiceschanged', fillVoices);
-      onLeave(function () { window.speechSynthesis.removeEventListener('voiceschanged', fillVoices); });
-    }
-    voiceSelect.addEventListener('change', function () {
-      st.voiceURI = voiceSelect.value;
-      Speech.voiceURI = st.voiceURI;
-      Speech.pickVoice();
-      save();
-    });
-    body.appendChild(pCard('Voice',
-      setting('Speaking speed', 'Slower speech is easier to follow for new listeners.',
-        segmented([[0.65, 'Slow'], [0.8, 'Medium'], [1, 'Normal']], st.rate, function (v) { st.rate = v; Speech.rate = v; save(); })),
-      h('label', { class: 'field' }, 'Voice', voiceSelect),
-      h('div', { class: 'btn-row' }, h('button', { class: 'btn blue small', onclick: function () { A.unlock(); Speech.say(['Hi! Where\'s the ball?']); } }, 'Test voice')),
-      h('p', { class: 'p-muted', text: 'Tip: iPhone has nicer voices you can download for free: Settings > Accessibility > Spoken Content > Voices > English. Pick one marked Enhanced or Premium, then choose it here.' })));
 
     var importInput = h('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
     importInput.addEventListener('change', function () {
@@ -1455,27 +1679,27 @@
         if (!window.confirm('Replace the progress on this device with this backup?')) return;
         var keepCustom = state.custom;
         state = P.normalizeState(data, Date.now());
-        // Photos and recordings live on the device, so keep this device's.
+        // Photos live on the device, so keep this device's.
         state.custom = keepCustom;
         S.saveState(state, true);
         applySettings();
         toast('Backup restored');
         go('parent');
-      }).catch(function () { toast('That file isn\'t a Word Buddies backup.'); });
+      }).catch(function () { toast('That file isn\'t a Word Wizard backup.'); });
       importInput.value = '';
     });
     body.appendChild(pCard('Backup',
       h('p', { text: 'Save a backup file (to Files, email, or AirDrop) and restore it on a new phone.' }),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn blue small', onclick: function () {
-          shareFile('word-buddies-backup-' + P.dayKey(Date.now()) + '.json', JSON.stringify(state), 'application/json');
+          shareFile('word-wizard-backup-' + P.dayKey(Date.now()) + '.json', JSON.stringify(state), 'application/json');
         } }, 'Save backup'),
         h('button', { class: 'btn white small', onclick: function () { importInput.click(); } }, 'Restore backup')),
       importInput,
-      h('p', { class: 'p-muted', text: 'Photos and voice recordings stay on this device and are not in the backup.' })));
+      h('p', { class: 'p-muted', text: 'Your photos stay on this device and are not in the backup.' })));
 
     body.appendChild(pCard('Start over',
-      h('p', { class: 'p-muted', text: 'Erases progress and stickers. Your settings, names, photos and recordings are kept.' }),
+      h('p', { class: 'p-muted', text: 'Erases progress and stickers. Your settings, notes and photos are kept.' }),
       h('div', { class: 'btn-row' }, h('button', {
         class: 'btn red small',
         onclick: function () {
@@ -1498,30 +1722,48 @@
         h('li', { html: 'Open this page in <b>Safari</b>.' }),
         h('li', { html: 'Tap the ' + SHARE_SVG + ' <b>Share</b> button.' }),
         h('li', { html: 'Choose <b>Add to Home Screen</b>, then <b>Add</b>.' }),
-        h('li', { html: 'Open <b>Word Buddies</b> from your Home Screen. It runs full screen and works offline.' })),
+        h('li', { html: 'Open <b>Word Wizard</b> from your Home Screen. It runs full screen and works offline.' })),
       tip ? null : h('p', { class: 'p-muted', text: isStandalone() ? 'You\'re using the Home Screen app. You\'re all set!' : '' })));
 
     body.appendChild(pCard('How to play together',
+      h('p', { text: 'Toddlers learn much less from screens alone than from people. Playing together is what makes this game work.' }),
       h('ol', {},
-        h('li', { html: '<b>Sit together and let your child do the tapping.</b> Your job is to cheer.' }),
-        h('li', { html: '<b>Give them time to look.</b> After "Where\'s the dog?", wait a few seconds. If they don\'t tap, the game asks again.' }),
-        h('li', { html: '<b>Try not to point to the answer.</b> Only the first tap counts toward progress. After a wrong tap the game gently shows the right picture, so your child still ends with a win.' }),
-        h('li', { html: '<b>Say it again after they choose:</b> "Yes, the dog! Woof woof!" Hearing a word many times is how understanding grows.' }),
-        h('li', { html: '<b>Keep it short and happy.</b> One or two Play sessions (3 to 5 minutes) a few times a day. Stop while it\'s still fun.' }),
-        h('li', { html: '<b>Practice in real life.</b> Ask "Where\'s your nose?" or "Where\'s the ball?" and let your child point, look or bring it. Tap the pencil next to any word for ideas.' }),
-        h('li', { html: '<b>Talk about what your child is looking at,</b> using short phrases: "Ball! Big ball!"' }))));
+        h('li', { html: '<b>Sit beside ' + CHILD + '</b> for every session.' }),
+        h('li', { html: '<b>Say the word after the wizard does</b>, then <b>wait</b>. Give ' + CHILD + ' time to look and choose.' }),
+        h('li', { html: '<b>Don\'t point to the answer.</b> Only a tap with no help counts as progress. If ' + CHILD + ' needs help, the game shows the right picture.' }),
+        h('li', { html: '<b>Cheer, then say the word again:</b> "Yes, the ball! Ball!"' }),
+        h('li', { html: '<b>Keep it short:</b> 5 to 10 minutes, once or twice a day, most days. Stop while ' + CHILD + ' still wants more.' }),
+        h('li', { html: '<b>Bring the words off the screen.</b> After each session you\'ll get ideas for today\'s words. Use <b>Real things</b> to hold up the real ball next to the picture.' }),
+        h('li', { html: '<b>Add your photos.</b> Photos of ' + CHILD + '\'s own things and people help the most (Words tab).' }))));
 
-    body.appendChild(pCard('What the stars mean',
-      h('div', { class: 'word-row' }, h('span', { class: 'stars3', html: starSvg(true, STAR_COLORS.fromTwo) }),
-        h('div', { class: 'info', html: '<b>Picks from 2</b><div class="p-muted">Picked the right picture on the first try at least twice.</div>' })),
-      h('div', { class: 'word-row' }, h('span', { class: 'stars3', html: starSvg(true, STAR_COLORS.fromMany) }),
-        h('div', { class: 'info', html: '<b>Picks from 3 or 4</b><div class="p-muted">Picked it on the first try at least twice with 3 or 4 pictures to choose from.</div>' })),
-      h('div', { class: 'word-row' }, h('span', { class: 'stars3', html: starSvg(true, STAR_COLORS.mastered) }),
-        h('div', { class: 'info', html: '<b>Mastered</b><div class="p-muted">Right with 3 or 4 pictures on ' + P.MASTER_DAYS + ' different days, and 4 of the last 5 tries right.</div>' })),
-      h('p', { text: 'The number of pictures grows as your child gets a word right, so lucky guesses don\'t earn stars. When a word is mastered, a new one joins, and mastered words come back for a quick check after 1, 3, 7, 14 and 30 days.' })));
+    body.appendChild(pCard('How Word Wizard teaches',
+      h('ul', {},
+        h('li', { html: '<b>"Where\'s the ___?" with the word last.</b> A short, familiar sentence helps toddlers pick out the word.' }),
+        h('li', { html: '<b>Taps count only after the word is said.</b> The tap should mean "I heard you", so the game ignores taps while it\'s talking.' }),
+        h('li', { html: '<b>2, then 3, then 4 pictures.</b> Two pictures is a 50% guess, so a word moves to 3 pictures as soon as it\'s found twice in a row.' }),
+        h('li', { html: '<b>No elimination shortcuts.</b> At 4 pictures, other words still being learned are included, so ' + CHILD + ' can\'t win by ruling out pictures he already knows.' }),
+        h('li', { html: '<b>Real photos, several of each word</b>, starting with similar ones (and your photos) and moving to different-looking ones later.' }),
+        h('li', { html: '<b>One warm, clear voice</b> says every line, always the same way, with ' + CHILD + '\'s name in the cheers.' }),
+        h('li', { html: '<b>Gentle mistakes.</b> A wrong tap gets "Hmm, let\'s look" and the right picture, then a do-over with the pictures moved. No buzzers, no lost points, no timers.' }),
+        h('li', { html: '<b>Spread over days.</b> Words come back across sessions and days instead of being drilled all at once. Only 1 or 2 new words join at a time.' }))));
 
-    body.appendChild(pCard('Why understanding first?',
-      h('p', { text: 'Children understand words before they can say them. Each word your child understands is one they can later learn to say. Keep naming things all day; when your child starts trying to talk, the words will be ready.' })));
+    body.appendChild(pCard('What the word stages mean',
+      h('div', { class: 'word-row' }, stageChip({ state: 'learning', level: 1 }),
+        h('div', { class: 'info p-muted wrap', text: 'Finding the word among 2, then 3, then 4 pictures. It moves up at about 80% found with no hint across 2 sessions, and back down after 2 sessions under 50%.' })),
+      h('div', { class: 'word-row' }, stageChip({ state: 'review' }),
+        h('div', { class: 'info p-muted wrap', text: 'Found with no hint among 4 pictures at about 80% on 2 different days. Checked again 2 days later, then 7 days later, each time with a different picture.' })),
+      h('div', { class: 'word-row' }, stageChip({ state: 'mastered' }),
+        h('div', { class: 'info p-muted wrap', text: 'Passed both checks. It still comes back now and then, and goes back to learning if it\'s missed twice in a row.' }))));
+
+    body.appendChild(pCard('Screen time',
+      h('p', { text: 'Pediatric and WHO guidance for age 2: keep screen time to 1 hour a day or less (less is better), use it together, and don\'t let it replace talking, reading, play and sleep. A 5 to 10 minute session fits within that. Word Wizard has no ads, no notifications and no streaks, and each session stops on its own.' })));
+
+    body.appendChild(pCard('When to ask for an evaluation',
+      h('p', { text: 'Understanding words is one of the best predictors of how language develops. Ask your pediatrician for a speech-language evaluation and a hearing test if your 2-year-old:' }),
+      h('ul', {},
+        h('li', { text: 'has trouble understanding words or simple directions ("Get your shoes")' }),
+        h('li', { text: 'uses few gestures, like pointing, waving or showing' }),
+        h('li', { text: 'seems less interested in people, or you have other social-communication concerns' }))));
 
     body.appendChild(pCard('iPhone tips',
       h('ul', {},
@@ -1531,11 +1773,11 @@
         h('li', { html: '<b>Keep progress safe:</b> use the Home Screen app, and save a backup now and then (Settings tab).' }))));
 
     body.appendChild(pCard('Please note',
-      h('p', { text: 'Word Buddies supports, but doesn\'t replace, speech therapy. If you have concerns about your child\'s speech or language, talk with your pediatrician or a speech-language pathologist. You can share the progress report from the Progress tab with your child\'s therapist.' }),
+      h('p', { text: SUPPORT_NOTE + ' If you have concerns about ' + CHILD + '\'s speech or language, talk with your pediatrician or a speech-language pathologist, and share the progress report with them.' }),
       h('p', { class: 'p-muted', text: 'Everything stays on this device. No accounts, no ads, no tracking.' })));
 
     body.appendChild(pCard('Credits',
-      h('p', { class: 'p-muted', text: 'Pictures: Microsoft Fluent Emoji (MIT License). Font: Fredoka (SIL Open Font License).' })));
+      h('p', { class: 'p-muted', text: 'Voice and word photos: made with ElevenLabs. Stickers and icons: Microsoft Fluent Emoji (MIT License). Font: Fredoka (SIL Open Font License). Game design follows published research on toddler word learning and receptive language teaching.' })));
   }
 
   /* ------------------------------------------------------------------ */
@@ -1543,9 +1785,6 @@
   /* ------------------------------------------------------------------ */
 
   function applySettings() {
-    Speech.rate = state.settings.rate;
-    Speech.voiceURI = state.settings.voiceURI;
-    Speech.pickVoice();
     Sfx.enabled = state.settings.sfx;
   }
 
@@ -1574,7 +1813,6 @@
     });
   }
 
-  Speech.init();
   applySettings();
   if (isStandalone()) S.requestPersist();
   go(state.settings.welcomed ? 'home' : 'welcome');

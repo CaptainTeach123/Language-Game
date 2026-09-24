@@ -1,8 +1,8 @@
 {
-  "name": "word-buddies",
+  "name": "word-wizard",
   "version": "1.0.0",
   "private": true,
-  "description": "A talking picture game that helps toddlers with speech delay learn 50 first words. Installs on iPhone from Safari.",
+  "description": "Word Wizard: a listening game that helps Anthony understand 50 first words. Real photos, a recorded voice, installs on iPhone from Safari.",
   "scripts": {
     "start": "npx --yes http-server -c-1 -p 8080 .",
     "test": "node --test tests/*.test.js",

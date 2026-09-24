@@ -1,92 +1,78 @@
-# Word Buddies
+# Word Wizard
 
-A bright, cartoon **listening game** that helps a toddler (around 30 months) with a speech delay **understand 50 important first words**. Pip the mascot says a word and the child taps the matching picture. Nothing asks the child to talk. It builds receptive language (understanding), which comes before speaking.
+A bright **listening game** made for **Anthony**, a toddler (around 30 months) with a speech delay, to help him **understand 50 important first words**. A friendly little cartoon wizard says a word ("Where's the ball?") and Anthony taps the matching **real photo**. Nothing asks him to talk. The game builds receptive language (understanding), which comes before speaking.
 
-It's built to install on an **iPhone** like an app: full screen, its own Home Screen icon, and it works offline.
+- **Every line is a warm recorded voice** (made with ElevenLabs), with cheers that use Anthony's name: "Great job, Anthony!", "High five, Anthony!"
+- **Real photos** of every word: three similar ones to learn from, and one that looks different to check the word has really stuck.
+- It installs on an **iPhone** like an app: full screen, its own Home Screen icon, and it works offline.
 
-![Word Buddies screens](docs/preview.png)
+![Word Wizard screens](docs/preview.png)
 
-## Put it on your iPhone
+## Put it on the iPhone
 
-The game is a web app (a "PWA"), so it doesn't need the App Store. Host it once, then add it to the Home Screen.
+The game is a web app (a "PWA"), so it doesn't need the App Store.
 
-1. **Host it with GitHub Pages (free).** In this repository on GitHub go to **Settings → Pages**. Under *Build and deployment* choose **Deploy from a branch**, pick the branch with this code (for example `main`) and the **/(root)** folder, then **Save**. About a minute later it's live at:
+1. **It's hosted on GitHub Pages.** Every push to this branch is published by the workflow in `.github/workflows/jekyll-gh-pages.yml` (in the repository go to **Settings → Pages** and make sure *Source* is **GitHub Actions**). The game is at:
    **https://captainteach123.github.io/Language-Game/**
 2. **On the iPhone**, open that link in **Safari**, tap **Share** (the square with an arrow), then **Add to Home Screen → Add**.
-3. Open **Word Buddies** from the Home Screen. It runs full screen, works without internet after the first visit, and keeps progress on the phone.
+3. Open **Word Wizard** from the Home Screen. It runs full screen, works without internet after the first visit, and keeps progress on the phone.
 
-Tip for toddlers: turn on **Guided Access** (Settings → Accessibility → Guided Access, then triple-click the side button) to keep little fingers inside the game.
+Tip: turn on **Guided Access** (Settings → Accessibility → Guided Access, then triple-click the side button) to keep little fingers inside the game.
 
 ## How it teaches
 
-Each **Play** session is about 10 short rounds (3 to 6 minutes) that mix two listening activities:
+The design follows a research brief on receptive "hear the word, tap the picture" games for 2-year-olds with speech delay.
 
-| Activity | What happens |
-| --- | --- |
-| **Learn** | A big picture appears and Pip names it slowly with a short model sentence ("Ball! Kick the ball! Ball!"). The card then glows and Pip says "Tap the ball!" When the child taps it, there's a celebration. |
-| **Find it** | "Where's the dog?" with 2, 3 or 4 pictures. A correct tap gets cheers and the word said again. A wrong tap gets a gentle "That's the cat." and the right picture glows (a pointing hand appears after a second miss), so every round ends in success. If the child is still looking, Pip asks again. |
+**Play together.** A short card before each session reminds the grown-up to sit beside Anthony, say the word too, wait, and not point. After the session, a card suggests how to use today's words with real things, and **Real things** mode shows the picture while you hold up the real ball.
 
-About a third of Find it rounds are **Pop** rounds, where the pictures float in bubbles ("Pop the dog!"). The home screen also has **Find** and **Pop** buttons for sessions of just that game, and **Words**, a talking picture book to browse all 50 words.
+**Each round.** A quiet half second to look, then "Where's the ball?" with the word last. Taps only count once the question has been said (so a tap means "I heard you"), and two-finger, palm and rapid repeat taps are ignored. If Anthony waits: "Find the ball!", then the right picture glows with "Here's the ball!" (counted as *needed a hint*). A wrong tap gets a calm "Hmm, let's look. This is the ball." and a do-over with the pictures moved. A right tap gets short, varied praise ("Yes!", "You found it, Anthony!") and "That's the ball!"
 
-### Mastery, measured by first taps
+**New words** start with a single big picture: "Here's the ball! Touch the ball."
 
-Only the child's **first tap** in each round counts, so hints never inflate progress. Every word earns three stars:
+**Calm screen.** No confetti on every round, the wizard stays still while the question is asked, and there's a small celebration every 5 finds ("Magic listening, Anthony!"). After each session he picks a present and gets a sticker for his sticker book (36 to collect).
 
-- **Picks from 2 (blue):** right on the first try at least twice.
-- **Picks from 3 or 4 (orange):** right on the first try at least twice with 3 or 4 pictures to choose from.
-- **Mastered (green):** right with 3 or 4 pictures on **3 different days**, and **4 of the last 5** tries right (80%).
-
-The number of pictures grows as the child gets a word right (2, then 3, then 4) and drops back to 2 if a word gets hard, so a lucky guess can't earn mastery. The game works on a small set of words at a time (5 by default). When one is mastered, the next word joins. Mastered words come back for a quick check after 1, 3, 7, 14 and 30 days, and a word that starts getting missed goes back into practice.
-
-### Built on how toddlers learn words
-
-- Slow, clear speech (speed adjustable), with the word said on its own and inside a short sentence.
-- Many repetitions: each word is named when it appears, when it's tapped, and again after every correct answer.
-- Errorless learning: hints after a miss, never a buzzer, and every round ends with the right answer.
-- Pictures from different categories early on (a dog next to an apple, not a cat), so the task is about the word.
-- Real-life practice ideas and baby-sign tips for each word in the grown-ups area.
-
-### Keeping it fun
-
-- **Pip**, a friendly purple mascot whose mouth moves while it talks, and who jumps and cheers.
-- Bright 3D cartoon pictures that wiggle, hop, float and spin when tapped.
-- Confetti, stars flying into the progress trail, popping bubbles, and cheerful sound effects.
-- **Pick a present** after every session: tap a gift box to reveal a surprise sticker for the **sticker book** (36 to collect).
+**Learning → Review → Mastered.**
+- A word starts with **2 pictures**, moves to **3**, then **4** at about 80% found with no hint across 2 sessions, and drops back after 2 sessions under 50%.
+- Other words still being learned are mixed in as wrong choices, so the answer can't be found by ruling out words he already knows. Words that sound alike ("cat" and "hat") or look alike (two face close-ups) are never shown together.
+- At 4 pictures and about 80% on 2 different days, a word moves to **Review**: it's checked again 2 days and 7 days later, each time with a photo he hasn't seen. Passing both makes it **Mastered**. Mastered words still come back now and then, and go back to learning if missed twice in a row.
+- Sessions are 10 to 20 pictures and stop by themselves after 5 or 10 minutes, always ending on a success. About 60% of each session is words being learned, 30% review and 10% older words, with only 1 or 2 new words at a time.
 
 ## The grown-ups area
 
-**Press and hold the purple gear** on the home screen for about 2 seconds (a quick tap won't open it).
+**Press and hold the purple gear** on the home screen for about 2 seconds.
 
-- **Progress:** words mastered, the three star counts, a 7-day practice chart with first-try accuracy, the words being learned now, and progress by category.
-- **Share with your speech therapist:** exports a spreadsheet (CSV) of every word showing first-try accuracy, recent accuracy, days right, and which words are mastered.
-- **Words:** every word with its stars and stats. Choose which words to learn now, or tap the pencil to:
-  - **rename it** (for example "Mama", "Abuela", "Nana"),
-  - **record your own voice** saying it (many kids listen best to a familiar voice),
-  - **use a real photo** (your child's own cup, dog or grandparent), which helps words carry over to real life,
-  - mark it as **"already understands this word"**,
-  - see a **real-life practice idea** ("Ask 'Where's your nose?' and touch it together") and a baby-sign tip.
-- **Settings:** child's name (used in cheers), words at a time, play length, sound effects, speaking speed, voice choice, backup and restore, and reset.
-- **Help:** how to play together, what the stars mean, and iPhone tips.
+- **Progress:** words mastered, in review and being learned, a 7-day chart, today's minutes and accuracy, and progress by category.
+- **Report for the speech therapist:** a spreadsheet (CSV) or printable page with, for every word: stage, pictures shown, trials, % correct with no hint, how often a hint was needed, wrong first taps, right on the do-over, photos used, dates introduced and mastered, and your notes.
+- **Words:** start, pause or resume words, and tap the pencil on a word to:
+  - **add photos** of Anthony's own things and people (for Mommy, Daddy and baby your photos replace the stock photos, and "Anthony" joins the game once there's a photo of him),
+  - mark it as **already understood**,
+  - write **notes** (these go in the report),
+  - see a way to say it in play and in real life.
+- **Everyday words** (up, more, all done...) with tips and baby signs for daily routines.
+- **Settings:** words learning at once, pictures per session, time limit, sound effects, backup and restore.
+- **Help:** playing together, how the stages work, screen-time guidance, and when to ask for a speech-language evaluation.
 
-Everything stays on the device: no accounts, no ads, no tracking.
+Everything stays on the phone: no accounts, no ads, no tracking.
 
 ## The 50 words
 
+**35 picture words** (the listening game):
+
 | Category | Words |
 | --- | --- |
-| People | Mommy, Daddy, baby |
-| Social | hi, bye-bye, more, all done, help, yes, no, please, uh-oh |
-| Actions | up, down, go, stop, open, eat, drink, sleep, hug |
+| People | Mommy, Daddy, baby, Anthony (with your photo) |
 | Animals | dog, cat, cow, duck, pig, bird, fish |
-| Food | milk, water, juice, cookie, apple, banana |
-| Body | eyes, nose, mouth, ears |
-| Clothes | shoes, hat, socks |
+| Food | milk, water, juice, cookie, apple, banana, cup |
 | Toys | ball, book, car, bubbles, teddy |
-| Home & Sky | bed, bath, sun, moon |
+| Clothes | shoes, hat, socks |
+| Home & Sky | bath, bed, sun, moon |
+| Body | nose, eyes, feet, mouth, ears |
 
-The list draws on common first-word research (MacArthur-Bates CDI and the Language Development Survey) and the "core words" speech-language pathologists teach first. It mixes words a child hears all day and will later use to ask for things (more, help, all done, up, open, go) with everyday people, animals, food, body parts, clothes, toys and household things. Words are introduced in a familiar-first order (see `START_ORDER` in `js/words.js`).
+**15 everyday words** that a still picture can't really show, practiced in daily routines and browsable in the picture book: hi, bye-bye, more, all done, help, yes, no, uh-oh, up, down, go, stop, open, eat, sleep.
 
-> Word Buddies supports, but doesn't replace, speech therapy. If you have concerns about your child's speech or language, talk with your pediatrician or a speech-language pathologist.
+The list draws on first-word research (MacArthur-Bates CDI and Wordbank). Words are introduced familiar-first (see `START_ORDER` in `js/words.js`).
+
+> Word Wizard supports, but doesn't replace, speech therapy. If you have concerns about Anthony's speech or language, talk with your pediatrician or a speech-language pathologist.
 
 ## For developers
 
@@ -94,31 +80,37 @@ Plain HTML, CSS and JavaScript with no build step and no dependencies.
 
 ```
 index.html              app shell (iPhone meta tags, manifest, scripts)
-css/app.css             all styles and animations
-js/words.js             the 50 words, categories, stickers, introduction order
-js/progress.js          mastery engine: first-tap stars, review schedule, session planner (unit tested)
-js/storage.js           localStorage progress + IndexedDB for photos and recordings
-js/audio.js             speech, grown-up voice recordings, sound effects
-js/app.js               screens and games
+css/app.css             styles and animations
+js/words.js             the 50 words, categories, photos, stickers, introduction order
+js/progress.js          learning engine: levels, review schedule, session planner, report (unit tested)
+js/storage.js           localStorage progress + IndexedDB for grown-up photos
+js/audio.js             voice clip player and sound effects
+js/app.js               screens, games and the wizard
+audio/                  408 voice clips: <word>-<line>.mp3 and common-<line>.mp3
+img/photos/             151 word photos: <word>-1..4.jpg and one per everyday word
+img/stickers, img/ui, img/icons   stickers, icons and app icons
 sw.js                   offline cache (file list generated by tools/build-sw.js)
-manifest.webmanifest    Home Screen app settings
-img/words, img/stickers, img/ui, img/icons   pictures
 tests/                  unit and data tests (node --test)
+tools/voice/            the spoken lines (lines.js) and the clip splitter (split_voice.py)
+tools/photos/           the photo prompts (prompts.js) and the sheet cropper (crop.py)
 tools/                  offline-list builder, icon renderer, end-to-end playthrough
 ```
 
 ```sh
 npm start        # serve at http://localhost:8080
-npm test         # unit + data tests
+npm test         # unit + data tests (every spoken line has a clip, every photo is used, ...)
 npm run build    # refresh the offline file list after changing any app file (tests fail if you forget)
 npm run e2e      # plays through every screen at iPhone sizes and saves screenshots (needs Playwright)
-npm run icons    # re-render the app icons (needs Playwright)
+npm run icons    # re-render the app icons from the wizard (needs Playwright)
 ```
 
-If you later want it in the App Store, the same code can be wrapped with [Capacitor](https://capacitorjs.com/). That needs a Mac with Xcode and an Apple Developer account.
+**Voice.** `node tools/voice/lines.js` prints every line, grouped the way they were generated with ElevenLabs (voice "Emma - Bright Kids Educator", model `eleven_multilingual_v2`): one generation per word, and groups of up to six for shared lines, with a 1.5 s break between lines. `tools/voice/split_voice.py` cuts each generation into one small MP3 per line. To change a line, regenerate its group, split it, and run the tests.
+
+**Photos.** `tools/photos/prompts.js` has the prompt for each word: a 2x2 sheet of real photos on white (three similar, one different-looking), generated with ElevenLabs image generation (GPT Image 2, 2048x2048). `tools/photos/crop.py` cuts each sheet into four 520 px JPEGs.
 
 ## Credits
 
-- Pictures: [Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT License (`img/LICENSE-fluent-emoji.txt`).
+- Voice and word photos: made with [ElevenLabs](https://elevenlabs.io).
+- Stickers and icons: [Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT License (`img/LICENSE-fluent-emoji.txt`).
 - Font: [Fredoka](https://github.com/hafontia/Fredoka-One), SIL Open Font License (`fonts/OFL.txt`).
-- Pip the mascot, app icons and sound effects are drawn and synthesized in code.
+- The wizard, app icons and sound effects are drawn and synthesized in code.

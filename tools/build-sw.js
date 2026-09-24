@@ -12,8 +12,8 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const SW = path.join(ROOT, 'sw.js');
-const INCLUDE = ['index.html', 'manifest.webmanifest', 'css', 'js', 'fonts', 'img'];
-const EXTS = new Set(['.html', '.webmanifest', '.css', '.js', '.woff2', '.png']);
+const INCLUDE = ['index.html', 'manifest.webmanifest', 'css', 'js', 'fonts', 'img', 'audio'];
+const EXTS = new Set(['.html', '.webmanifest', '.css', '.js', '.woff2', '.png', '.svg', '.jpg', '.mp3']);
 
 function walk(rel) {
   const abs = path.join(ROOT, rel);
