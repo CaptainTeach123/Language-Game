@@ -953,7 +953,8 @@
       grid.classList.remove('reshow');
       void grid.offsetWidth;
       grid.classList.add('reshow');
-      ask(L.prompt);
+      grid.removeAttribute('data-ready');
+      later(function () { ask(L.prompt); }, LOOK_MS); // a quiet look at the moved pictures first
     }
 
     session.repeat = function () { if (mode !== 'over' && !locked) Speech.say(L.prompt); };

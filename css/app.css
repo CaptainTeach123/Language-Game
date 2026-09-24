@@ -448,7 +448,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   display: block;
   transition: background 0.3s, transform 0.3s;
 }
-.trail i.done { background: var(--gold); transform: scale(1.15); animation: star-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.trail i.done { background: var(--gold); transform: scale(1.15); animation: star-pop 0.35s cubic-bezier(0.2, 1.6, 0.4, 1); }
 @keyframes star-pop { 0% { transform: scale(0.5) rotate(-40deg); } 60% { transform: scale(1.8) rotate(15deg); } 100% { transform: scale(1.15) rotate(0); } }
 .trail i.now { background: #fff; transform: scale(1.4); }
 
@@ -545,7 +545,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   .choice { width: min(42vw, 27svh, 230px); }
   .choices.n2 .choice { width: min(43vw, 32svh, 260px); }
 }
-.choice { animation: pop-in 0.3s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 50ms) backwards; }
+.choice { animation: pop-in 0.25s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 40ms) backwards; }
 .choice:active { transform: scale(0.96); }
 .choice.right, .big-card.right { border-color: var(--green); box-shadow: 0 7px 0 var(--green-dark), 0 0 0 8px rgba(34, 197, 94, 0.3); transform: scale(1.08); transition: transform 0.25s; z-index: 2; }
 /* A wrong tap gets no animation or sound; it just dims. */
@@ -553,6 +553,8 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
 .choice.fade { opacity: 0.25; transform: scale(0.9); }
 .choices.reshow { animation: fade-in 0.35s ease-out; }
 .choice.hint { animation: glow 1s ease-in-out infinite; }
+/* No pop-in on the do-over (the row just fades in), and never again once a card is answered. */
+.choices.reshow .choice, .choice.right, .choice.dim, .choice.fade { animation: none; }
 @keyframes glow { 0%, 100% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 0 rgba(255, 201, 40, 0.9); } 50% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 14px rgba(255, 201, 40, 0.55); transform: scale(1.04); } }
 
 
@@ -936,7 +938,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
 
 /* Respect "Reduce Motion": keep the short tap feedback, stop the looping motion. */
 @media (prefers-reduced-motion: reduce) {
-  .cloud, .spark, .sun::before, .castle i, .logo span, .play-btn, .mascot, .mascot .frames, .mascot img.talk, .mascot .wand i, .mode-btn, .mode-btn img, .next-btn, .gift, .choice, .choice.hint, .prize::before, .burst i, .big-card.tap-me, .tile, .sticker, .pick, .chip, .trail i, .bubble, #app > * { animation: none !important; }
+  .cloud, .spark, .sun::before, .castle i, .logo span, .play-btn, .mascot, .mascot .frames, .mascot img.talk, .mascot img.blink, .mascot .wand i, .mode-btn, .mode-btn img, .next-btn, .gift, .choice, .choice.hint, .prize::before, .burst i, .big-card.tap-me, .tile, .sticker, .pick, .chip, .trail i, .bubble, #app > * { animation: none !important; }
   .stage.enter { animation-duration: 0.01ms; }
 }
 
@@ -944,9 +946,9 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
 /* Calm game screen (research: nothing moves while the word is said)   */
 /* ------------------------------------------------------------------ */
 
-body.calm .spark, body.calm .cloud, body.calm .sun::before, body.calm .castle i { animation-play-state: paused; }
-body.calm .mode-btn img { animation: none; }
-.mascot.still, .mascot.still .frames { animation: none; }
+body.calm .spark, body.calm .cloud, body.calm .sun::before { animation-play-state: paused; }
+body.calm .castle i, body.calm .mode-btn img { animation: none; }
+.mascot.still, .mascot.still .frames, .mascot.still img.blink, .mascot.still .wand i { animation: none; }
 body.calm .bubble { animation: fade-in 0.3s ease-out; }
 .mascot.still.happy .frames { animation: jump 0.5s ease-out 2; }
 
