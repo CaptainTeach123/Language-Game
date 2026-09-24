@@ -1,0 +1,17 @@
+{
+  "name": "Word Buddies",
+  "short_name": "Word Buddies",
+  "description": "A bright, talking picture game that helps toddlers with speech delay learn their first 50 words.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#38B6F5",
+  "theme_color": "#38B6F5",
+  "categories": ["education", "kids"],
+  "icons": [
+    { "src": "img/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
