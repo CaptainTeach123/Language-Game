@@ -250,7 +250,9 @@
     return h('div', { class: 'mascot' + (cls ? ' ' + cls : '') },
       h('div', { class: 'frames' },
         h('img', { src: 'img/ui/wizard.png', alt: '', draggable: 'false' }),
-        h('img', { class: 'talk', src: 'img/ui/wizard-talk.png', alt: '', draggable: 'false' })));
+        h('img', { class: 'talk', src: 'img/ui/wizard-talk.png', alt: '', draggable: 'false' }),
+        h('img', { class: 'blink', src: 'img/ui/wizard-blink.png', alt: '', draggable: 'false' }),
+        h('div', { class: 'wand', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'))));
   }
 
   // The wizard's mouth moves (and he nods along) while talking, except during find-the-picture rounds,
@@ -395,6 +397,7 @@
     app.className = 'screen-' + name;
     // Keep the background still while a game is on screen.
     document.body.classList.toggle('calm', name === 'session' || name === 'coplay');
+    document.body.setAttribute('data-screen', name);
     screenName = name;
     SCREENS[name](arg);
     if (name === 'home') applyUpdate();
@@ -446,8 +449,8 @@
   SCREENS.welcome = function () {
     var chosen = [];
     var grid = h('div', { class: 'pick-grid' });
-    PICTURE_WORDS.filter(function (w) { return !w.personal; }).forEach(function (w) {
-      var tile = h('button', { class: 'pick', 'aria-pressed': 'false', 'aria-label': label(w) }, picture(w), h('span', { text: label(w) }));
+    PICTURE_WORDS.filter(function (w) { return !w.personal; }).forEach(function (w, i) {
+      var tile = h('button', { class: 'pick', style: '--i:' + Math.min(i, 14), 'aria-pressed': 'false', 'aria-label': label(w) }, picture(w), h('span', { text: label(w) }));
       tile.addEventListener('click', function () {
         var i = chosen.indexOf(w.id);
         if (i !== -1) chosen.splice(i, 1);
@@ -531,6 +534,7 @@
       modeBtn('search', 'Real things', '#FF8A00', function () { go('real'); }),
       modeBtn('chest', 'Stickers', '#FF5C8A', function () { go('stickers'); })
     );
+    Array.prototype.forEach.call(modes.children, function (b, i) { b.style.setProperty('--i', i); });
 
     app.appendChild(h('div', { class: 'home' },
       topbar(count, null, h('div', {}, gear, h('div', { class: 'hold-label', text: 'Grown-ups' }))),
@@ -831,6 +835,7 @@
           if (id === w.id) targetBtn = btn;
         }
         buttons[id].className = 'card choice';
+        buttons[id].style.setProperty('--i', grid.children.length);
         grid.appendChild(buttons[id]);
       });
     }
@@ -982,7 +987,7 @@
 
     for (var i = 0; i < 3; i++) {
       (function () {
-        var g = h('button', { class: 'gift', 'aria-label': 'Present' }, h('img', { src: 'img/ui/gift.png', alt: '' }));
+        var g = h('button', { class: 'gift', style: '--i:' + i, 'aria-label': 'Present' }, h('img', { src: 'img/ui/gift.png', alt: '' }));
         g.addEventListener('click', function () { open(g); });
         gifts.appendChild(g);
       })();
@@ -998,7 +1003,9 @@
       later(function () {
         var st = P.awardSticker(state, D.STICKERS);
         save();
-        var prize = h('div', { class: 'prize' }, h('img', { src: 'img/stickers/' + st.id + '.png', alt: st.name }));
+        var burst = h('div', { class: 'burst', 'aria-hidden': 'true' });
+        for (var b = 0; b < 8; b++) burst.appendChild(h('i', { style: '--a:' + (b * 45 + 20) + 'deg' }));
+        var prize = h('div', { class: 'prize' }, burst, h('img', { src: 'img/stickers/' + st.id + '.png', alt: st.name }));
         gifts.replaceWith(prize);
         hint.textContent = cap(st.name) + '!';
         Sfx.tada();
@@ -1085,7 +1092,7 @@
     var scroller = h('div', { class: 'scroll' }, grid);
 
     function chip(id, name, color, icon) {
-      var c = h('button', { class: 'chip' + (wordsCat === id ? ' on' : ''), style: '--cc:' + color },
+      var c = h('button', { class: 'chip' + (wordsCat === id ? ' on' : ''), style: '--cc:' + color + ';--i:' + chips.children.length },
         icon ? h('img', { src: icon, alt: '' }) : null, name);
       c.addEventListener('click', function () {
         Sfx.tap();
@@ -1106,7 +1113,7 @@
       var list = D.WORDS.filter(function (w) { return wordsCat === 'all' || w.cat === wordsCat; });
       list.forEach(function (w, idx) {
         var cat = D.catById[w.cat];
-        var tile = h('button', { class: 'tile', style: '--cc:' + cat.color, 'aria-label': label(w) },
+        var tile = h('button', { class: 'tile', style: '--cc:' + cat.color + ';--i:' + Math.min(idx, 14), 'aria-label': label(w) },
           picture(w), h('div', { class: 'name', text: label(w) }));
         tile.addEventListener('click', function () { Sfx.pop(); openViewer(list, idx); });
         grid.appendChild(tile);
@@ -1188,10 +1195,10 @@
   SCREENS.stickers = function () {
     var have = D.STICKERS.filter(function (s) { return state.stickers[s.id]; }).length;
     var grid = h('div', { class: 'grid' });
-    D.STICKERS.forEach(function (s) {
+    D.STICKERS.forEach(function (s, i) {
       var n = state.stickers[s.id] || 0;
       var img = h('img', { src: 'img/stickers/' + s.id + '.png', alt: n ? s.name : 'Mystery sticker' });
-      var el = h('button', { class: 'sticker' + (n ? '' : ' missing'), 'aria-label': n ? s.name : 'Mystery sticker' },
+      var el = h('button', { class: 'sticker' + (n ? '' : ' missing'), style: '--i:' + Math.min(i, 14), 'aria-label': n ? s.name : 'Mystery sticker' },
         img, n > 1 ? h('span', { class: 'count', text: 'x' + n }) : null);
       el.addEventListener('click', function () {
         if (!n) { Speech.say([shared('more-stickers')]); return; }

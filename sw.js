@@ -4,7 +4,7 @@
  * tools/build-sw.js; VERSION changes whenever any file changes, which makes
  * phones fetch the new version.
  */
-const VERSION = '8ddd27e6d7';
+const VERSION = 'd6d48aabda';
 const CACHE = 'word-wizard-' + VERSION;
 const ASSETS = [
   // ASSETS-START
@@ -212,12 +212,14 @@ const ASSETS = [
   'img/ui/castle.png',
   'img/ui/chest.png',
   'img/ui/gift.png',
+  'img/ui/hills.png',
   'img/ui/house.png',
   'img/ui/me.png',
   'img/ui/picture.png',
   'img/ui/search.png',
   'img/ui/speaker.png',
   'img/ui/star.png',
+  'img/ui/wizard-blink.png',
   'img/ui/wizard-talk.png',
   'img/ui/wizard.png',
   'audio/apple-find.mp3',
@@ -632,7 +634,9 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // Fetch fresh copies: the browser's page cache may still hold the previous version of a file.
+  const fresh = ASSETS.map((f) => new Request(f, { cache: 'reload' }));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(fresh)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

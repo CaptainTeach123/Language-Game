@@ -71,7 +71,12 @@ async function run() {
   async function ttsCheck(page) {
     if (await page.evaluate(() => window.__tts)) errors.push('the computer voice was used');
   }
-  const tap = (page, sel) => page.click(sel, { force: true });
+  // Let a tapped element finish popping in first (a toddler is slower than Playwright).
+  const tap = async (page, sel) => {
+    await page.waitForSelector(sel);
+    await page.$eval(sel, (el) => el.getAnimations().forEach((a) => { try { a.finish(); } catch (e) { /* endless ones */ } }));
+    await page.click(sel, { force: true });
+  };
   const round = (page) => page.evaluate(() => {
     const s = window.WB_APP.session();
     if (!s || !s.plan[s.idx]) return null;
@@ -138,7 +143,9 @@ async function run() {
     await shot(page, '02-pick-words.png');
     await tap(page, '.welcome .btn.green');
     await page.waitForSelector('.play-btn');
-    if (!(await page.$('.home .mascot img'))) errors.push('the wizard is missing');
+    const wiz = await page.$('.home .mascot img');
+    const wizBox = wiz && await wiz.boundingBox();
+    if (!wizBox || wizBox.height < 80) errors.push(`the wizard is missing on the home screen (${wizBox ? wizBox.height : 0}px tall)`);
     const logo = await page.getAttribute('.logo', 'aria-label');
     if (logo !== 'Word Wizard') errors.push(`logo says ${logo}`);
     await shot(page, '03-home.png');
@@ -274,6 +281,32 @@ async function run() {
       await playRound(page);
     }
     await ttsCheck(page);
+    await ctx.close();
+  }
+
+  // ---------- a wide window (desktop or iPad): the wizard shows and the hills fill the width ----------
+  {
+    const { ctx, page } = await phone('Desktop Chrome', 'wide', { viewport: { width: 1784, height: 893 } });
+    await page.goto(base);
+    await page.waitForSelector('.pick');
+    await tap(page, '.welcome .btn.green');
+    await page.waitForSelector('.play-btn');
+    await page.waitForTimeout(600);
+    const wide = await page.evaluate(() => {
+      const img = document.querySelector('.home .mascot img');
+      const hills = document.querySelector('#sky .hills');
+      const castle = document.querySelector('#sky .castle');
+      return {
+        wizard: img ? img.getBoundingClientRect().height : 0,
+        hills: hills ? hills.getBoundingClientRect().width : 0,
+        hillsImg: hills ? getComputedStyle(hills).backgroundImage : '',
+        castle: castle ? castle.getBoundingClientRect() : null
+      };
+    });
+    if (wide.wizard < 150) errors.push(`wide window: the wizard is ${wide.wizard}px tall`);
+    if (wide.hills < 1700 || !/hills\.png/.test(wide.hillsImg)) errors.push('wide window: the hills do not fill the width');
+    if (!wide.castle || Math.abs(wide.castle.left + wide.castle.width / 2 - 892) > 2) errors.push('wide window: the castle is not centered');
+    await shot(page, '40-wide-home.png');
     await ctx.close();
   }
 
