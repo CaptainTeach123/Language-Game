@@ -19,12 +19,12 @@ function fresh() {
   return P.createState(T0);
 }
 
-// Make a word mastered: understood on 2 days (3+ choices) and said on 3 days.
+// Make a word mastered: right with 4 pictures on 3 different days.
 function master(state, id, start) {
   const t = start || T0;
   for (let d = 0; d < 3; d++) {
     P.recordFind(state, id, true, 4, t + d * DAY);
-    P.recordSay(state, id, 'said', t + d * DAY);
+    P.recordFind(state, id, true, 4, t + d * DAY + 1000);
   }
 }
 
@@ -35,58 +35,82 @@ test('a brand new word has no stars', () => {
   assert.equal(lv.mastered, false);
 });
 
-test('understands needs first-try wins with 3+ choices on 2 different days', () => {
+test('hearing a word starts it but earns no stars', () => {
   const s = fresh();
-  P.recordFind(s, 'ball', true, 4, T0);
-  P.recordFind(s, 'ball', true, 4, T0 + 1000);
-  P.recordFind(s, 'ball', true, 4, T0 + 2000);
-  assert.equal(P.level(P.peek(s, 'ball')).understands, false, 'one day is not enough');
-  P.recordFind(s, 'ball', true, 4, T0 + DAY);
-  assert.equal(P.level(P.peek(s, 'ball')).understands, true);
+  P.recordExposure(s, 'ball', T0);
+  const lv = P.level(P.peek(s, 'ball'));
+  assert.equal(lv.stage, 'started');
+  assert.equal(lv.stars, 0);
+  assert.equal(s.days[P.dayKey(T0)].heard, 1);
 });
 
-test('wins with only 2 choices do not count as understanding (could be luck)', () => {
+test('star 1: right on the first try twice', () => {
   const s = fresh();
-  for (let d = 0; d < 4; d++) P.recordFind(s, 'dog', true, 2, T0 + d * DAY);
-  assert.equal(P.level(P.peek(s, 'dog')).understands, false);
+  P.recordFind(s, 'ball', true, 2, T0);
+  assert.equal(P.level(P.peek(s, 'ball')).fromTwo, false);
+  P.recordFind(s, 'ball', true, 2, T0 + 1000);
+  const lv = P.level(P.peek(s, 'ball'));
+  assert.equal(lv.fromTwo, true);
+  assert.equal(lv.fromMany, false);
+  assert.equal(lv.stars, 1);
 });
 
-test('recent misses take the understands star away again', () => {
+test('star 2: right twice with 3 or 4 pictures', () => {
   const s = fresh();
-  P.recordFind(s, 'cat', true, 4, T0);
-  P.recordFind(s, 'cat', true, 4, T0 + DAY);
-  P.recordFind(s, 'cat', true, 4, T0 + DAY + 1);
-  assert.equal(P.level(P.peek(s, 'cat')).understands, true);
-  P.recordFind(s, 'cat', false, 4, T0 + 2 * DAY);
-  P.recordFind(s, 'cat', false, 4, T0 + 2 * DAY + 1);
-  assert.equal(P.level(P.peek(s, 'cat')).understands, false);
+  P.recordFind(s, 'dog', true, 3, T0);
+  P.recordFind(s, 'dog', true, 4, T0 + 1000);
+  const lv = P.level(P.peek(s, 'dog'));
+  assert.equal(lv.fromMany, true);
+  assert.equal(lv.fromTwo, true, 'picking from more pictures implies picking from 2');
+  assert.equal(lv.mastered, false, 'one day is not mastery');
 });
 
-test('says needs "Said it!" on 3 different days; any try earns the tries star', () => {
+test('mastery needs wins with 3+ pictures on 3 different days', () => {
   const s = fresh();
-  P.recordSay(s, 'milk', 'tried', T0);
-  let lv = P.level(P.peek(s, 'milk'));
-  assert.equal(lv.tries, true);
-  assert.equal(lv.says, false);
-  P.recordSay(s, 'milk', 'said', T0);
-  P.recordSay(s, 'milk', 'said', T0 + 5000);
-  P.recordSay(s, 'milk', 'said', T0 + DAY);
-  assert.equal(P.level(P.peek(s, 'milk')).says, false, 'same day twice counts once');
-  P.recordSay(s, 'milk', 'said', T0 + 2 * DAY);
-  lv = P.level(P.peek(s, 'milk'));
-  assert.equal(lv.says, true);
-  assert.equal(lv.mastered, false, 'still needs the understands star');
-});
-
-test('mastered = understands + says', () => {
-  const s = fresh();
-  master(s, 'more');
-  const lv = P.level(P.peek(s, 'more'));
+  for (let d = 0; d < 2; d++) {
+    P.recordFind(s, 'cat', true, 4, T0 + d * DAY);
+    P.recordFind(s, 'cat', true, 4, T0 + d * DAY + 1);
+  }
+  assert.equal(P.level(P.peek(s, 'cat')).mastered, false, 'two days is not enough');
+  P.recordFind(s, 'cat', true, 4, T0 + 2 * DAY);
+  const lv = P.level(P.peek(s, 'cat'));
   assert.equal(lv.mastered, true);
   assert.equal(lv.stars, 3);
 });
 
-test('"already says this word" counts as mastered', () => {
+test('wins with only 2 pictures never reach mastery (could be luck)', () => {
+  const s = fresh();
+  for (let d = 0; d < 6; d++) P.recordFind(s, 'duck', true, 2, T0 + d * DAY);
+  const lv = P.level(P.peek(s, 'duck'));
+  assert.equal(lv.fromTwo, true);
+  assert.equal(lv.fromMany, false);
+  assert.equal(lv.mastered, false);
+});
+
+test('mastery needs 4 of the last 5 right, and is lost if the word starts getting missed', () => {
+  const s = fresh();
+  master(s, 'milk');
+  assert.equal(P.isMastered(s, 'milk'), true);
+  P.recordFind(s, 'milk', false, 4, T0 + 5 * DAY);
+  assert.equal(P.isMastered(s, 'milk'), true, 'one miss: 4 of 5 is still fine');
+  P.recordFind(s, 'milk', false, 4, T0 + 5 * DAY + 1);
+  assert.equal(P.isMastered(s, 'milk'), false, 'two misses: back to learning');
+  const lv = P.level(P.peek(s, 'milk'));
+  assert.equal(lv.fromMany, true, 'earlier stars stay');
+});
+
+test('only the first tap is recorded as a round', () => {
+  const s = fresh();
+  P.recordFind(s, 'car', false, 3, T0);
+  const st = P.peek(s, 'car');
+  assert.equal(st.findTries, 1);
+  assert.equal(st.findOk, 0);
+  assert.deepEqual(st.recent, [0]);
+  assert.equal(s.days[P.dayKey(T0)].rounds, 1);
+  assert.equal(s.days[P.dayKey(T0)].correct, 0);
+});
+
+test('"already understands this word" counts as mastered', () => {
   const s = fresh();
   P.setKnown(s, 'mommy', true);
   assert.equal(P.isMastered(s, 'mommy'), true);
@@ -118,17 +142,27 @@ test('learning set fills in introduction order and skips paused and mastered wor
   assert.ok(!s.paused.includes('ball'));
 });
 
-test('a session has the right length, never repeats a word back to back, and teaches before testing', () => {
+test('a session only has listening activities, never repeats a word back to back, and names new words first', () => {
   const s = fresh();
   for (let seed = 1; seed < 40; seed++) {
     const plan = P.planSession(s, D.START_ORDER, { rounds: 10, rng: seeded(seed) }, T0);
     assert.equal(plan.length, 10);
+    plan.forEach((r) => assert.ok(r.type === 'learn' || r.type === 'find', r.type));
+    plan.filter((r) => r.type === 'find').forEach((r) => assert.ok(r.style === 'cards' || r.style === 'bubbles'));
     for (let i = 1; i < plan.length; i++) assert.notEqual(plan[i].id, plan[i - 1].id);
     const firstType = {};
     plan.forEach((r) => { if (!firstType[r.id]) firstType[r.id] = r.type; });
     Object.values(firstType).forEach((t) => assert.equal(t, 'learn', 'new words start with a learn round'));
     plan.forEach((r) => assert.ok(s.focus.includes(r.id)));
   }
+});
+
+test('words the child already found start with Find it', () => {
+  const s = fresh();
+  P.recordFind(s, 'mommy', true, 2, T0);
+  assert.deepEqual(P.roundSequence(P.peek(s, 'mommy')), ['find', 'find', 'learn']);
+  P.recordFind(s, 'mommy', false, 2, T0 + 1);
+  assert.equal(P.roundSequence(P.peek(s, 'mommy'))[0], 'learn', 'after a miss, show and name it again first');
 });
 
 test('mastered words come back for review when due', () => {
@@ -140,6 +174,7 @@ test('mastered words come back for review when due', () => {
   const ids = plan.map((r) => r.id);
   assert.ok(ids.includes('mommy') || ids.includes('daddy'), 'a due review is included');
   assert.ok(['mommy', 'daddy'].includes(plan[0].id), 'session starts with an easy win');
+  assert.equal(plan[0].type, 'find');
   assert.ok(!s.focus.includes('mommy'));
 });
 
@@ -147,7 +182,7 @@ test('review schedule widens after each successful review', () => {
   const s = fresh();
   master(s, 'ball', T0);
   const st = P.peek(s, 'ball');
-  const last = T0 + 2 * DAY;
+  const last = st.last;
   assert.equal(P.isDue(st, last), false);
   assert.equal(P.isDue(st, last + P.REVIEW_DAYS[st.reviewStep] * DAY), true);
   const before = st.reviewStep;
@@ -157,13 +192,13 @@ test('review schedule widens after each successful review', () => {
   assert.equal(st.reviewStep, before + 1, 'only one step per day');
 });
 
-test('Find it and Say it modes only use that activity', () => {
+test('Find and Pop modes are all Find it rounds; Pop uses bubbles', () => {
   const s = fresh();
-  ['find', 'say'].forEach((mode) => {
-    const plan = P.planSession(s, D.START_ORDER, { mode, rounds: 8, rng: seeded(3) }, T0);
-    assert.equal(plan.length, 8);
-    plan.forEach((r) => assert.equal(r.type, mode));
-  });
+  const find = P.planSession(s, D.START_ORDER, { mode: 'find', rounds: 8, rng: seeded(3) }, T0);
+  find.forEach((r) => { assert.equal(r.type, 'find'); assert.equal(r.style, 'cards'); });
+  const pop = P.planSession(s, D.START_ORDER, { mode: 'pop', rounds: 8, rng: seeded(3) }, T0);
+  pop.forEach((r) => { assert.equal(r.type, 'find'); assert.equal(r.style, 'bubbles'); });
+  assert.equal(pop.length, 8);
 });
 
 test('when everything is mastered, sessions keep reviewing', () => {
@@ -171,6 +206,7 @@ test('when everything is mastered, sessions keep reviewing', () => {
   D.START_ORDER.forEach((id) => P.setKnown(s, id, true));
   const plan = P.planSession(s, D.START_ORDER, { rounds: 6, rng: seeded(9) }, T0);
   assert.equal(plan.length, 6);
+  plan.forEach((r) => assert.equal(r.type, 'find'));
 });
 
 test('distractors never look like the answer', () => {
@@ -211,24 +247,38 @@ test('practice streak counts consecutive days', () => {
   assert.equal(P.streak(s, T0 + 3 * DAY), 0);
 });
 
-test('report has a row per word and quotes commas', () => {
+test('report has a row per word, listening columns only, and quotes commas', () => {
   const s = fresh();
   s.custom.mommy = { label: 'Mama, Mom' };
+  master(s, 'ball');
   const csv = P.reportCSV(s, D.WORDS, D.catById, (w) => (s.custom[w.id] && s.custom[w.id].label) || w.word);
   const lines = csv.trim().split('\n');
   assert.equal(lines.length, D.WORDS.length + 1);
+  assert.ok(!/say|said|tried/i.test(lines[0]), 'no speaking columns');
   assert.ok(lines[1].startsWith('"Mama, Mom",People'));
+  const ball = lines.find((l) => l.startsWith('ball,'));
+  assert.ok(ball.includes('mastered,yes,yes,yes,6,6,100%'), ball);
 });
 
-test('saved data is repaired instead of crashing', () => {
-  const s = P.normalizeState({ words: { ball: { seen: 2, recent: 'oops' } }, settings: { rate: 1 }, focus: 'x' }, T0);
+test('saved data is repaired instead of crashing, and old saves carry over', () => {
+  const s = P.normalizeState({ words: { ball: { seen: 2, recent: 'oops' } }, settings: { rate: 1, mic: true }, focus: 'x' }, T0);
   assert.deepEqual(s.words.ball.recent, []);
   assert.equal(s.words.ball.seen, 2);
   assert.equal(s.settings.rate, 1);
+  assert.ok(!('mic' in s.settings), 'retired settings are dropped');
   assert.equal(s.settings.activeSize, P.DEFAULT_SETTINGS.activeSize);
   assert.deepEqual(s.focus, []);
   assert.deepEqual(P.normalizeState(null, T0).words, {});
   assert.deepEqual(P.normalizeState('garbage', T0).focus, []);
+
+  // A save from the first version (with speaking stats) keeps its listening progress.
+  const old = P.normalizeState({ words: { dog: { findOk: 5, findTries: 6, recent: [1, 1, 1, 1], findDays: ['2026-01-01', '2026-01-02', '2026-01-03'], said: 2, saidDays: ['2026-01-01'] } } }, T0);
+  const dog = old.words.dog;
+  assert.deepEqual(dog.winDays, ['2026-01-01', '2026-01-02', '2026-01-03']);
+  assert.equal(dog.wins3, 3);
+  assert.equal(dog.wins2, 2);
+  assert.ok(!('said' in dog));
+  assert.equal(P.level(dog).mastered, true);
 });
 
 test('dayDiff works across month and DST boundaries', () => {

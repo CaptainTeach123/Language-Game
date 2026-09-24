@@ -493,67 +493,43 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 }
 @keyframes point { from { transform: translate(0, 0) rotate(-20deg); } to { transform: translate(-10px, -10px) rotate(-20deg); } }
 
-/* Grown-up bar */
-.grownup {
-  flex: none;
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 24px;
-  padding: 8px 10px 10px;
-  margin-top: 8px;
-  box-shadow: 0 4px 0 rgba(38, 38, 74, 0.12);
-  font-family: var(--font-plain);
+/* Learn round: after the word is named, the card glows until the child taps it. */
+.big-card.tap-me { animation: tap-glow 1.2s ease-in-out infinite; }
+@keyframes tap-glow {
+  0%, 100% { box-shadow: 0 7px 0 var(--cc), 0 0 0 0 rgba(255, 201, 40, 0.9); transform: scale(1); }
+  50% { box-shadow: 0 7px 0 var(--cc), 0 0 0 16px rgba(255, 201, 40, 0.5); transform: scale(1.03); }
 }
-.grownup .hint {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  text-align: center;
-  margin-bottom: 6px;
-  line-height: 1.3;
-}
-.grownup .hint b { color: var(--ink); }
-.grownup .row { display: flex; gap: 8px; }
-.grownup .row .btn { flex: 1 1 0; min-width: 0; font-family: var(--font-fun); min-height: 52px; padding: 6px 6px; font-size: 19px; gap: 6px; white-space: nowrap; }
-.grownup .row .btn img { width: 26px; height: 26px; }
-@media (max-width: 420px) {
-  .grownup .row.three .btn { font-size: 18px; }
-  .grownup .row.three .btn img { display: none; }
-}
-.grownup.nudge .row .btn { animation: nudge-up 0.9s ease-in-out 3; }
-@keyframes nudge-up { 50% { transform: translateY(-5px); } }
 
-/* Voice balloon */
-.voice {
-  flex: none;
-  width: 48px;
-  height: 84px;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-}
-.voice .balloon {
-  width: 40px;
-  height: 48px;
-  border-radius: 50% 50% 46% 46%;
-  background: radial-gradient(circle at 35% 30%, #FFB3CB, var(--pink) 60%, #C9255A);
-  transform-origin: 50% 100%;
-  transition: transform 0.08s linear, filter 0.2s;
+/* Pop rounds: the same "find it" task with pictures inside floating bubbles. */
+.choices.bubbles .choice {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 50%;
+  padding: 0;
+  animation: bob-bubble 3.2s ease-in-out infinite;
 }
-.voice .balloon::after {
-  content: '';
+.choices.bubbles .choice .shell {
   position: absolute;
-  left: 50%;
-  bottom: -7px;
-  margin-left: -5px;
-  border: 5px solid transparent;
-  border-bottom: 7px solid #C9255A;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.95) 0 7%, rgba(255, 255, 255, 0) 12%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.35) 0 55%, rgba(168, 222, 255, 0.55) 80%, rgba(155, 93, 229, 0.45) 100%);
+  border: 4px solid rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 -10px 22px rgba(47, 123, 255, 0.25), 0 10px 22px rgba(38, 38, 74, 0.15);
+  pointer-events: none;
 }
-.voice .string { width: 2px; height: 26px; background: rgba(38, 38, 74, 0.4); }
-.voice.heard .balloon { filter: drop-shadow(0 0 10px #FFE066) brightness(1.1); }
-.voice.off { opacity: 0.35; }
+.choices.bubbles .choice .pic { position: relative; width: 78%; height: auto; aspect-ratio: 1 / 1; }
+.choices.bubbles .choice.hint { animation: bob-bubble 3.2s ease-in-out infinite; filter: drop-shadow(0 0 14px #FFD23F) drop-shadow(0 0 6px #FFD23F); }
+.choices.bubbles .choice.right { box-shadow: none; animation: none; transform: scale(1.12); transition: transform 0.3s; }
+.choices.bubbles .choice.popped .shell { animation: bubble-pop 0.35s ease-out forwards; }
+@keyframes bob-bubble { 0%, 100% { translate: 0 0; } 50% { translate: 0 -10px; } }
+@keyframes bubble-pop { 0% { transform: scale(1); opacity: 1; } 60% { transform: scale(1.3); opacity: 0.6; } 100% { transform: scale(1.5); opacity: 0; } }
 
 /* ------------------------------------------------------------------ */
 /* Picture animations (tap a picture to see it move)                   */
@@ -913,9 +889,6 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
   .choices.n4 .choice { width: min(33vh, 22vw, 180px); }
   .stage-main { width: 60%; }
   .choices { gap: 10px; }
-  .grownup { padding: 6px 8px; }
-  .grownup .hint { display: none; }
-  .grownup .row .btn { min-height: 44px; }
   .next-btn { width: 70px; height: 70px; }
   .reward { flex-direction: row; flex-wrap: wrap; }
 }
@@ -927,6 +900,6 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 
 /* Respect "Reduce Motion": keep the short tap feedback, stop the looping motion. */
 @media (prefers-reduced-motion: reduce) {
-  .cloud, .logo span, .play-btn, .pip-bob, .next-btn, .gift, .choice.hint, .prize::before, .grownup.nudge .row .btn { animation: none !important; }
+  .cloud, .logo span, .play-btn, .pip-bob, .next-btn, .gift, .choice.hint, .prize::before, .big-card.tap-me, .choices.bubbles .choice { animation: none !important; }
   .stage.enter { animation-duration: 0.01ms; }
 }

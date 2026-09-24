@@ -2,7 +2,6 @@
  * Word Buddies: everything that makes sound.
  *   Speech  - text-to-speech plus grown-up voice recordings, played in order
  *   Sfx     - cheerful sound effects made with Web Audio (no sound files)
- *   Mic     - microphone loudness for the "voice balloon" (nothing is saved)
  *   Rec     - record a grown-up saying a word
  *
  * iPhone notes: Safari only allows sound after the first tap, so unlock()
@@ -305,63 +304,6 @@
   };
 
   /* ------------------------------------------------------------------ */
-  /* Microphone loudness (voice balloon)                                 */
-  /* ------------------------------------------------------------------ */
-
-  var Mic = {
-    stream: null,
-    analyser: null,
-    data: null,
-
-    supported: function () {
-      return !!(root.navigator.mediaDevices && root.navigator.mediaDevices.getUserMedia && audioCtx());
-    },
-
-    start: function () {
-      var self = this;
-      if (self.stream) return Promise.resolve(true);
-      if (!self.supported()) return Promise.resolve(false);
-      setSession('play-and-record');
-      return root.navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      }).then(function (stream) {
-        var c = audioCtx();
-        if (c.state !== 'running') c.resume();
-        self.stream = stream;
-        var src = c.createMediaStreamSource(stream);
-        self.analyser = c.createAnalyser();
-        self.analyser.fftSize = 1024;
-        self.data = new Uint8Array(self.analyser.fftSize);
-        src.connect(self.analyser);
-        return true;
-      }).catch(function () {
-        setSession('playback');
-        return false;
-      });
-    },
-
-    // 0 (quiet) .. 1 (loud)
-    level: function () {
-      if (!this.analyser) return 0;
-      this.analyser.getByteTimeDomainData(this.data);
-      var sum = 0;
-      for (var i = 0; i < this.data.length; i++) {
-        var v = (this.data[i] - 128) / 128;
-        sum += v * v;
-      }
-      var rms = Math.sqrt(sum / this.data.length);
-      return Math.min(1, rms * 6);
-    },
-
-    stop: function () {
-      if (this.stream) this.stream.getTracks().forEach(function (t) { t.stop(); });
-      this.stream = null;
-      this.analyser = null;
-      setSession('playback');
-    }
-  };
-
-  /* ------------------------------------------------------------------ */
   /* Record a grown-up's voice                                           */
   /* ------------------------------------------------------------------ */
 
@@ -412,5 +354,5 @@
     }
   };
 
-  root.WB_AUDIO = { unlock: unlock, audioCtx: audioCtx, Speech: Speech, Sfx: Sfx, Mic: Mic, Rec: Rec };
+  root.WB_AUDIO = { unlock: unlock, audioCtx: audioCtx, Speech: Speech, Sfx: Sfx, Rec: Rec };
 })(this);

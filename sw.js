@@ -4,7 +4,7 @@
  * tools/build-sw.js; VERSION changes whenever any file changes, which makes
  * phones fetch the new version.
  */
-const VERSION = 'c5711f3ee6';
+const VERSION = 'c440cba8ce';
 const CACHE = 'word-buddies-' + VERSION;
 const ASSETS = [
   // ASSETS-START
@@ -64,9 +64,7 @@ const ASSETS = [
   'img/ui/picture.png',
   'img/ui/search.png',
   'img/ui/speaker.png',
-  'img/ui/speaking.png',
   'img/ui/star.png',
-  'img/ui/thumb.png',
   'img/words/all-done.png',
   'img/words/apple.png',
   'img/words/baby.png',

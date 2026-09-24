@@ -25,7 +25,8 @@ test('every word is complete', () => {
     assert.ok(D.catById[w.cat], `${w.id}: unknown category`);
     assert.ok(kinds.has(w.kind), `${w.id}: unknown kind`);
     assert.ok(/\{[wW]\}/.test(w.phrase), `${w.id}: phrase should include the word`);
-    assert.ok(Array.isArray(w.easy) && w.easy.length > 0, `${w.id}: needs close tries`);
+    if (w.kind === 'core') assert.ok(w.life, `${w.id}: action and social words need a real-life practice idea`);
+    assert.ok(!('easy' in w) && !('cloze' in w), `${w.id}: speaking-only fields are not used`);
     assert.ok(exists(`img/words/${w.img || w.id}.png`), `${w.id}: missing picture`);
   });
 });
@@ -49,13 +50,21 @@ test('every picture animation has CSS', () => {
   });
 });
 
+test('the game never asks the child to talk', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
+  assert.ok(!/Said it|Not yet|sayRound|recordSay|getUserMedia/.test(src));
+  assert.ok(!/Mic\b/.test(fs.readFileSync(path.join(ROOT, 'js/audio.js'), 'utf8')));
+});
+
 test('images referenced by the app exist', () => {
   const src = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
   const refs = src.match(/img\/ui\/[a-z-]+\.png/g) || [];
   assert.ok(refs.length > 0);
   refs.forEach((r) => assert.ok(exists(r), `missing ${r}`));
-  const icons = src.match(/'img\/ui\/' \+ icon/) ? ['picture', 'search', 'speaking', 'star'] : [];
-  icons.forEach((i) => assert.ok(exists(`img/ui/${i}.png`)));
+  (src.match(/modeBtn\('([a-z-]+)'/g) || []).forEach((m) => {
+    const icon = m.slice(9, -1);
+    assert.ok(exists(`img/ui/${icon}.png`), `missing mode icon ${icon}`);
+  });
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   (html.match(/(?:href|src)="([^"]+)"/g) || []).forEach((m) => {
     const rel = m.replace(/^(?:href|src)="/, '').replace(/"$/, '');

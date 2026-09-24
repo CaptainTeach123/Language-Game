@@ -1,17 +1,17 @@
 /*
- * Word Buddies: mastery engine.
+ * Word Buddies: mastery engine (receptive language).
  *
- * Every word earns three stars:
- *   1. Understands: picks the right picture on the first try when there
- *      are 3 or more choices, on at least 2 different days, and is
- *      getting at least 75% of recent tries right.
- *   2. Tries it:    the child has attempted the word (any sound, sign or
- *      part of the word) or said it.
- *   3. Says it:     a grown-up marked "Said it!" on 3 different days.
- *      The child's own consistent version counts ("ba" for ball).
- * A word is mastered when it has stars 1 and 3. Mastered words leave the
- * "learning now" set and come back for review on a widening schedule
- * (1, 3, 7, 14, 30 days) so they stay fresh.
+ * The child hears a word and picks its picture. Only the FIRST tap in a
+ * round counts, so hints never inflate progress. Every word earns stars:
+ *   1. Picks from 2:    right on the first try at least twice.
+ *   2. Picks from 3-4:  right on the first try at least twice when there
+ *                       were 3 or 4 pictures to choose from.
+ *   3. Mastered:        right with 3+ pictures on 3 different days, AND
+ *                       4 of the last 5 tries right (80%).
+ * The number of pictures grows as the child gets a word right, so a lucky
+ * guess can't earn mastery. Mastered words leave the "learning now" set
+ * and come back for a quick check after 1, 3, 7, 14 and 30 days. If a
+ * mastered word starts getting missed, it goes back to "learning now".
  *
  * Everything in here is plain data in, plain data out, so it can be unit
  * tested in Node (see tests/).
@@ -20,8 +20,8 @@
   'use strict';
 
   var RECENT_SIZE = 5;
-  var UNDERSTAND_DAYS = 2;
-  var SAY_DAYS = 3;
+  var MASTER_DAYS = 3;
+  var MASTER_ACC = 0.8;
   var REVIEW_DAYS = [1, 3, 7, 14, 30];
   var DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,8 +32,6 @@
     rate: 0.8,           // speaking speed (1 = normal)
     voiceURI: '',
     sfx: true,
-    cloze: true,         // fill-in-the-blank prompts in "Say it"
-    mic: false,          // voice balloon (microphone level only, nothing recorded)
     welcomed: false
   };
 
@@ -54,7 +52,7 @@
 
   function createState(now) {
     return {
-      version: 1,
+      version: 2,
       created: now || Date.now(),
       settings: Object.assign({}, DEFAULT_SETTINGS),
       words: {},
@@ -71,7 +69,10 @@
     var s = createState(now);
     if (!raw || typeof raw !== 'object') return s;
     s.created = raw.created || s.created;
-    s.settings = Object.assign({}, DEFAULT_SETTINGS, raw.settings || {});
+    var settings = Object.assign({}, DEFAULT_SETTINGS);
+    var rs = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
+    Object.keys(DEFAULT_SETTINGS).forEach(function (k) { if (k in rs) settings[k] = rs[k]; });
+    s.settings = settings;
     s.focus = Array.isArray(raw.focus) ? raw.focus.slice() : [];
     s.paused = Array.isArray(raw.paused) ? raw.paused.slice() : [];
     s.custom = raw.custom && typeof raw.custom === 'object' ? raw.custom : {};
@@ -84,27 +85,37 @@
 
   function newStat() {
     return {
-      seen: 0,
-      findTries: 0,
-      findOk: 0,
-      recent: [],
-      findDays: [],
-      said: 0,
-      tried: 0,
-      notYet: 0,
-      saidDays: [],
+      seen: 0,          // times heard in Learn rounds or the picture book
+      findTries: 0,     // Find it rounds (first taps)
+      findOk: 0,        // right on the first try
+      recent: [],       // last 5 first taps, 1 = right
+      wins2: 0,         // right first try with 2 pictures
+      wins3: 0,         // right first try with 3 or 4 pictures
+      winDays: [],      // days with a first-try win among 3+ pictures
       last: 0,
       reviewStep: 0,
       lastReviewDay: '',
-      known: false
+      known: false      // a grown-up says the child already understands it
     };
   }
 
+  var STAT_KEYS = Object.keys(newStat());
+
   function normalizeStat(raw) {
-    var st = Object.assign(newStat(), raw || {});
-    ['recent', 'findDays', 'saidDays'].forEach(function (k) {
-      if (!Array.isArray(st[k])) st[k] = [];
+    raw = raw && typeof raw === 'object' ? raw : {};
+    var st = newStat();
+    STAT_KEYS.forEach(function (k) { if (k in raw) st[k] = raw[k]; });
+    // Saves from the first version kept "findDays" (same meaning as winDays).
+    if (!('winDays' in raw) && Array.isArray(raw.findDays)) {
+      st.winDays = raw.findDays.slice();
+      st.wins3 = raw.findDays.length;
+      st.wins2 = Math.max(0, (raw.findOk | 0) - st.wins3);
+    }
+    ['recent', 'winDays'].forEach(function (k) { if (!Array.isArray(st[k])) st[k] = []; });
+    ['seen', 'findTries', 'findOk', 'wins2', 'wins3', 'last', 'reviewStep'].forEach(function (k) {
+      st[k] = Number(st[k]) || 0;
     });
+    st.known = !!st.known;
     return st;
   }
 
@@ -123,7 +134,7 @@
 
   function dayLog(state, now) {
     var key = dayKey(now);
-    if (!state.days[key]) state.days[key] = { rounds: 0, correct: 0, said: 0, tried: 0, sessions: 0, seconds: 0 };
+    if (!state.days[key]) state.days[key] = { rounds: 0, correct: 0, heard: 0, sessions: 0, seconds: 0 };
     return state.days[key];
   }
 
@@ -136,22 +147,21 @@
 
   function level(st) {
     st = st || newStat();
-    var understands = !!st.known ||
-      (st.findDays.length >= UNDERSTAND_DAYS && st.recent.length >= 3 && recentAcc(st) >= 0.75);
-    var says = !!st.known || st.saidDays.length >= SAY_DAYS;
-    var tries = says || st.tried > 0 || st.said > 0;
-    var mastered = understands && says;
+    var known = !!st.known;
+    var mastered = known ||
+      (st.winDays.length >= MASTER_DAYS && st.recent.length >= 4 && recentAcc(st) >= MASTER_ACC);
+    var fromMany = known || mastered || st.wins3 >= 2;
+    var fromTwo = fromMany || st.wins2 + st.wins3 >= 2;
     var stage;
     if (mastered) stage = 'mastered';
-    else if (understands || tries) stage = 'learning';
+    else if (fromTwo) stage = 'learning';
     else if (st.seen > 0 || st.findTries > 0) stage = 'started';
     else stage = 'new';
     return {
-      understands: understands,
-      tries: tries,
-      says: says,
+      fromTwo: fromTwo,
+      fromMany: fromMany,
       mastered: mastered,
-      stars: (understands ? 1 : 0) + (tries ? 1 : 0) + (says ? 1 : 0),
+      stars: (fromTwo ? 1 : 0) + (fromMany ? 1 : 0) + (mastered ? 1 : 0),
       stage: stage
     };
   }
@@ -160,8 +170,8 @@
     return level(peek(state, id)).mastered;
   }
 
-  // How many pictures to show in "Find it": start easy, get harder as the
-  // child gets them right so a lucky guess can't earn the star.
+  // How many pictures to show in "Find it": start with 2, add more as the
+  // child gets the word right, drop back to 2 if it gets hard.
   function choiceCount(st) {
     st = st || newStat();
     if (st.recent.length < 2) return 2;
@@ -171,14 +181,11 @@
     return 2;
   }
 
-  function touch(st, now) {
-    st.last = now;
-  }
-
   function recordExposure(state, id, now) {
     var st = stat(state, id);
     st.seen += 1;
-    touch(st, now);
+    st.last = now;
+    dayLog(state, now).heard += 1;
     return st;
   }
 
@@ -191,41 +198,27 @@
     else st.reviewStep = Math.max(st.reviewStep - 1, 0);
   }
 
-  // Only the child's FIRST tap on a "Find it" round is recorded.
+  // Only the child's FIRST tap in a "Find it" round is recorded.
   function recordFind(state, id, correct, choices, now) {
     var st = stat(state, id);
     var wasMastered = level(st).mastered;
     st.findTries += 1;
-    if (correct) st.findOk += 1;
     st.recent.push(correct ? 1 : 0);
     if (st.recent.length > RECENT_SIZE) st.recent.shift();
-    if (correct && choices >= 3) addDay(st.findDays, dayKey(now));
-    touch(st, now);
+    if (correct) {
+      st.findOk += 1;
+      if (choices >= 3) {
+        st.wins3 += 1;
+        addDay(st.winDays, dayKey(now));
+      } else {
+        st.wins2 += 1;
+      }
+    }
+    st.last = now;
     if (wasMastered) afterReview(st, correct, now);
     var log = dayLog(state, now);
     log.rounds += 1;
     if (correct) log.correct += 1;
-    return st;
-  }
-
-  // result: 'said' | 'tried' | 'notyet'
-  function recordSay(state, id, result, now) {
-    var st = stat(state, id);
-    var wasMastered = level(st).mastered;
-    var log = dayLog(state, now);
-    log.rounds += 1;
-    if (result === 'said') {
-      st.said += 1;
-      addDay(st.saidDays, dayKey(now));
-      log.said += 1;
-    } else if (result === 'tried') {
-      st.tried += 1;
-      log.tried += 1;
-    } else {
-      st.notYet += 1;
-    }
-    touch(st, now);
-    if (wasMastered && result !== 'tried') afterReview(st, result === 'said', now);
     return st;
   }
 
@@ -281,20 +274,18 @@
     return a;
   }
 
-  // Which activities a word should get this session, in order.
+  // Which activities a word gets this session, in order. A new word is
+  // shown and named first ("learn"), then the child finds it.
   function roundSequence(st) {
-    var lv = level(st);
-    if (lv.mastered) return st.reviewStep % 2 === 0 ? ['find', 'say'] : ['say', 'find'];
-    if (st.seen < 2 && st.findTries === 0) return ['learn', 'find', 'say'];
-    if (!lv.understands) {
-      var lastWrong = st.recent.length && !st.recent[st.recent.length - 1];
-      return lastWrong ? ['learn', 'find', 'say'] : ['find', 'say', 'find'];
-    }
-    return ['say', 'find', 'say'];
+    if (level(st).mastered) return ['find'];
+    if (st.findTries === 0 && st.seen < 2) return ['learn', 'find', 'find'];
+    var lastWrong = st.recent.length && !st.recent[st.recent.length - 1];
+    if (lastWrong) return ['learn', 'find', 'find'];
+    return ['find', 'find', 'learn'];
   }
 
   // Reorder so the same word never shows up twice in a row, while keeping
-  // each word's own rounds in order (learn before find before say).
+  // each word's own rounds in order (learn before find).
   function noBackToBack(list) {
     var rest = list.slice();
     var out = [];
@@ -312,10 +303,10 @@
 
   /*
    * Build one play session.
-   *   opts.mode   'mix' (default) | 'find' | 'say'
+   *   opts.mode   'mix' (default: learn + find) | 'find' (find only) | 'pop' (find, bubble style)
    *   opts.rounds number of rounds
    *   opts.rng    random function (for tests)
-   * Returns [{ type: 'learn'|'find'|'say', id }]
+   * Returns [{ type: 'learn'|'find', id, style: 'cards'|'bubbles' }]
    */
   function planSession(state, order, opts, now) {
     opts = opts || {};
@@ -358,9 +349,7 @@
       pass += 1;
     }
 
-    var reviewRounds = reviews.map(function (id) {
-      return { id: id, type: roundSequence(peek(state, id))[0] };
-    });
+    var reviewRounds = reviews.map(function (id) { return { id: id, type: 'find' }; });
 
     // Start with an easy win, then spread the other reviews out.
     var plan = [];
@@ -371,12 +360,13 @@
       if (gap && reviewRounds.length && (idx + 1) % gap === 0) plan.push(reviewRounds.shift());
     });
     while (reviewRounds.length) plan.push(reviewRounds.shift());
-    plan = plan.slice(0, rounds);
+    plan = noBackToBack(plan.slice(0, rounds));
 
-    if (mode === 'find' || mode === 'say') {
-      plan.forEach(function (r) { r.type = mode; });
-    }
-    return noBackToBack(plan);
+    plan.forEach(function (r) {
+      if (mode !== 'mix') r.type = 'find';
+      if (r.type === 'find') r.style = mode === 'pop' ? 'bubbles' : (mode === 'mix' && rng() < 0.35 ? 'bubbles' : 'cards');
+    });
+    return plan;
   }
 
   // Pick look-different wrong answers for "Find it".
@@ -445,7 +435,7 @@
   }
 
   function summary(state, words) {
-    var out = { total: words.length, mastered: 0, understands: 0, tries: 0, says: 0, started: 0, byCat: {} };
+    var out = { total: words.length, mastered: 0, fromTwo: 0, fromMany: 0, started: 0, byCat: {} };
     words.forEach(function (w) {
       var lv = level(peek(state, w.id));
       if (!out.byCat[w.cat]) out.byCat[w.cat] = { total: 0, mastered: 0, stars: 0 };
@@ -453,9 +443,8 @@
       c.total += 1;
       c.stars += lv.stars;
       if (lv.mastered) { out.mastered += 1; c.mastered += 1; }
-      if (lv.understands) out.understands += 1;
-      if (lv.tries) out.tries += 1;
-      if (lv.says) out.says += 1;
+      if (lv.fromTwo) out.fromTwo += 1;
+      if (lv.fromMany) out.fromMany += 1;
       if (lv.stage !== 'new') out.started += 1;
     });
     return out;
@@ -467,19 +456,21 @@
   }
 
   function reportCSV(state, words, catById, labelOf) {
-    var rows = [['Word', 'Category', 'Stage', 'Understands', 'Tries it', 'Says it',
-      'Find it first-try correct', 'Find it tries', 'Times said', 'Days said', 'Times tried', 'Last practiced']];
+    var rows = [['Word', 'Category', 'Stage', 'Picks from 2', 'Picks from 3-4', 'Mastered',
+      'Right first try', 'Find it tries', 'Recent accuracy', 'Days right with 3+ pictures', 'Times heard', 'Last practiced']];
     words.forEach(function (w) {
       var st = peek(state, w.id);
       var lv = level(st);
       rows.push([
         labelOf ? labelOf(w) : w.word,
         catById[w.cat] ? catById[w.cat].name : w.cat,
-        st.known ? 'already knew' : lv.stage,
-        lv.understands ? 'yes' : 'no',
-        lv.tries ? 'yes' : 'no',
-        lv.says ? 'yes' : 'no',
-        st.findOk, st.findTries, st.said, st.saidDays.length, st.tried,
+        st.known ? 'already understood' : lv.stage,
+        lv.fromTwo ? 'yes' : 'no',
+        lv.fromMany ? 'yes' : 'no',
+        lv.mastered ? 'yes' : 'no',
+        st.findOk, st.findTries,
+        st.recent.length ? Math.round(recentAcc(st) * 100) + '%' : '',
+        st.winDays.length, st.seen,
         st.last ? dayKey(st.last) : ''
       ]);
     });
@@ -489,6 +480,7 @@
   var api = {
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     REVIEW_DAYS: REVIEW_DAYS,
+    MASTER_DAYS: MASTER_DAYS,
     dayKey: dayKey,
     dayDiff: dayDiff,
     createState: createState,
@@ -502,7 +494,6 @@
     choiceCount: choiceCount,
     recordExposure: recordExposure,
     recordFind: recordFind,
-    recordSay: recordSay,
     setKnown: setKnown,
     isDue: isDue,
     refreshFocus: refreshFocus,

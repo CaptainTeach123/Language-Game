@@ -77,9 +77,10 @@ async function run() {
     });
     if (!info) return null;
     if (info.type === 'learn') {
-      await page.waitForSelector('.next-btn:not(.hidden)', { timeout: 10000 });
-      await page.click('.next-btn', { force: true });
-    } else if (info.type === 'find') {
+      // The card glows once the word has been named; tapping it is the child's answer.
+      await page.waitForSelector('.big-card.tap-me', { timeout: 10000 });
+      await page.click('.big-card', { force: true });
+    } else {
       await page.waitForSelector('.choice');
       if (answer === 'wrong') {
         const wrong = await page.$(`.choice:not([aria-label="${info.label}"])`);
@@ -87,9 +88,6 @@ async function run() {
         await page.waitForTimeout(400);
       }
       await page.click(`.choice[aria-label="${info.label}"]`, { force: true });
-    } else {
-      await page.waitForSelector('.grownup .btn.green');
-      await page.click('.grownup .btn.green', { force: true });
     }
     await page.waitForFunction((idx) => {
       const s = window.WB_APP.session();
@@ -117,6 +115,10 @@ async function run() {
         seen[t] = true;
         await page.waitForTimeout(600);
         await shot(page, `03-round-${t}.png`);
+        if (t === 'learn') {
+          await page.waitForSelector('.big-card.tap-me', { timeout: 10000 });
+          await shot(page, '03-round-learn-tap.png');
+        }
       }
       if (t === 'find' && !seen.findWrong) {
         seen.findWrong = true;
@@ -139,12 +141,16 @@ async function run() {
     await page.waitForSelector('.prize img');
     await shot(page, '05-prize.png');
 
-    // Second session to get say rounds
-    await page.click('.reward-actions .btn.green', { force: true });
+    // A Pop session (bubbles), with one wrong tap
+    await page.click('.reward-actions .btn.white', { force: true });
+    await page.waitForSelector('.mode-btn');
+    await page.click('.mode-btn >> nth=2', { force: true });
+    await page.waitForSelector('.choices.bubbles .choice');
+    await shot(page, '03-round-pop.png');
+    await playRound(page, 'wrong');
     for (let i = 0; i < 30; i++) {
-      const t = await page.evaluate(() => { const s = window.WB_APP.session(); return s && s.plan[s.idx].type; });
-      if (!t) break;
-      if (!seen[t]) { seen[t] = true; await page.waitForTimeout(600); await shot(page, `03-round-${t}.png`); }
+      const more = await page.evaluate(() => !!window.WB_APP.session());
+      if (!more) break;
       await playRound(page);
     }
     await page.waitForSelector('.gift');
@@ -192,6 +198,10 @@ async function run() {
     const st = await page.evaluate(() => window.WB_APP.state());
     if (st.custom.mommy.label !== 'Mama') errors.push('custom label not saved');
     if (!Object.keys(st.stickers).length) errors.push('no sticker saved');
+    const finds = Object.values(st.words).reduce((n, w) => n + w.findTries, 0);
+    const misses = Object.values(st.words).reduce((n, w) => n + (w.findTries - w.findOk), 0);
+    if (!finds) errors.push('no Find it rounds were recorded');
+    if (misses !== 2) errors.push(`expected exactly the 2 deliberate wrong first taps to count as misses, got ${misses}`);
 
     // Find-it mode, landscape
     await page.setViewportSize({ width: 844, height: 390 });
@@ -213,12 +223,12 @@ async function run() {
     await shot(page, '21-se-find.png');
     await page.click('.topbar .icon-btn', { force: true });
     await page.click('.mode-btn >> nth=2', { force: true });
-    await page.waitForSelector('.grownup');
-    await shot(page, '22-se-say.png');
+    await page.waitForSelector('.choices.bubbles');
+    await shot(page, '22-se-pop.png');
     await ctx.close();
   }
 
-  // ---------- microphone, recording and photo (fake media devices) ----------
+  // ---------- grown-up voice recording and photo (fake media devices) ----------
   {
     const mb = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
     const ctx = await mb.newContext({ ...devices['iPhone 13'], permissions: ['microphone'] });
@@ -248,15 +258,6 @@ async function run() {
     const entry = Object.values(custom).find((c) => c.rec && c.photo);
     if (!entry) errors.push(`recording/photo not saved for ${wordId}: ${JSON.stringify(custom)}`);
     await page.click('.sheet .btn.purple', { force: true });
-
-    // Voice balloon on, then play Say rounds.
-    await page.evaluate(() => { window.WB_APP.state().settings.mic = true; window.WB_APP.go('home'); });
-    await page.click('.mode-btn >> nth=2', { force: true });
-    await page.waitForSelector('.voice', { timeout: 5000 });
-    await page.waitForTimeout(3500);
-    await shot(page, '31-voice-balloon.png');
-    await page.click('.grownup .btn.yellow', { force: true });
-    await page.waitForTimeout(2500);
     await ctx.close();
     await mb.close();
   }
