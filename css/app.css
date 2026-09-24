@@ -88,7 +88,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
 #sky { position: fixed; inset: 0; overflow: hidden; pointer-events: none; --castle-h: min(37.7vw, 34vh); }
 
 /* A smiling sun with slowly turning rays. */
-.sun { position: absolute; top: 19%; left: 2%; width: min(16vw, 100px); aspect-ratio: 1 / 1; border-radius: 50%;
+.sun { position: absolute; top: max(19%, 150px); left: 2%; width: min(16vw, 100px); aspect-ratio: 1 / 1; border-radius: 50%;
   background: radial-gradient(circle, #FFF9CF 0 40%, #FFD84A 41% 50%, transparent 52%); }
 .sun::before { content: ''; position: absolute; inset: -45%; border-radius: 50%;
   background: repeating-conic-gradient(rgba(255, 246, 180, 0.6) 0 9deg, transparent 9deg 22.5deg);
@@ -97,7 +97,7 @@ img { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
   animation: sun-spin 60s linear infinite; }
 @keyframes sun-spin { to { transform: rotate(360deg); } }
 /* The sun only shines on the open-sky screens, not behind the lists, the grown-ups area or a game. */
-body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen='stickers'] .sun, body[data-screen='parent'] .sun, body.calm .sun { display: none; }
+body[data-screen='welcome'] .sun, body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen='stickers'] .sun, body[data-screen='parent'] .sun, body.calm .sun { display: none; }
 
 .cloud {
   position: absolute;
@@ -135,6 +135,10 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   height: var(--castle-h);
   width: calc(var(--castle-h) * 2.656); /* the picture is 1280 x 482 */
   margin-left: calc(var(--castle-h) * -1.328);
+}
+/* The picture sits on a pseudo-element so its feathered mask does not clip the sparkles above the roofline. */
+.castle::before {
+  content: ''; position: absolute; inset: 0;
   background: url('../img/ui/castle.png') center bottom / 100% 100% no-repeat;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
   mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
@@ -348,7 +352,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   flex: none;
 }
 .play-btn svg { width: 46%; height: 46%; margin-left: 8%; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.15)); }
-.play-btn:active { transform: translateY(6px) scale(0.97); box-shadow: 0 3px 0 #0F6B31; animation: none; }
+.play-btn:active { transform: translateY(6px) scale(0.97); box-shadow: 0 3px 0 #0F6B31; animation-name: pop-in, none; }
 @keyframes pulse-big { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 
 .modes {
@@ -374,9 +378,10 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   font-weight: 600;
   color: var(--ink);
   transition: transform 0.08s, box-shadow 0.08s;
-  animation: pop-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 90ms + 150ms) backwards;
+  animation: pop-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 90ms + 150ms);
 }
-.mode-btn img { width: min(15vw, 58px); height: min(15vw, 58px); object-fit: contain; animation: float 3.2s ease-in-out calc(var(--i, 0) * -1.1s) infinite; }
+.mode-btn img { width: min(15vw, 58px); height: min(15vw, 58px); object-fit: contain; animation: float 3.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -1.1s); }
 @keyframes float { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-5px) rotate(4deg); } }
 .mode-btn:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--mc); }
 
@@ -545,7 +550,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   .choice { width: min(42vw, 27svh, 230px); }
   .choices.n2 .choice { width: min(43vw, 32svh, 260px); }
 }
-.choice { animation: pop-in 0.25s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 40ms) backwards; }
+.choice { animation: pop-in 0.25s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
 .choice:active { transform: scale(0.96); }
 .choice.right, .big-card.right { border-color: var(--green); box-shadow: 0 7px 0 var(--green-dark), 0 0 0 8px rgba(34, 197, 94, 0.3); transform: scale(1.08); transition: transform 0.25s; z-index: 2; }
 /* A wrong tap gets no animation or sound; it just dims. */
@@ -554,7 +559,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
 .choices.reshow { animation: fade-in 0.35s ease-out; }
 .choice.hint { animation: glow 1s ease-in-out infinite; }
 /* No pop-in on the do-over (the row just fades in), and never again once a card is answered. */
-.choices.reshow .choice, .choice.right, .choice.dim, .choice.fade { animation: none; }
+.choices.reshow .choice:not(.hint), .choice.right, .choice.dim, .choice.fade { animation: none; }
 @keyframes glow { 0%, 100% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 0 rgba(255, 201, 40, 0.9); } 50% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 14px rgba(255, 201, 40, 0.55); transform: scale(1.04); } }
 
 
@@ -641,7 +646,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
 }
 .reward .mascot { width: min(40vw, 22vh); height: min(40vw, 22vh); }
 .gifts { display: flex; gap: 16px; justify-content: center; }
-.gift { width: min(26vw, 120px); aspect-ratio: 1 / 1; animation: pop-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 120ms) backwards, gift-wobble 1.4s ease-in-out calc(var(--i, 0) * 0.2s + 0.6s) infinite; }
+.gift { width: min(26vw, 120px); aspect-ratio: 1 / 1; animation: pop-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) backwards, gift-wobble 1.4s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 120ms), calc(var(--i, 0) * 0.2s + 0.6s); }
 .gift img { width: 100%; height: 100%; filter: drop-shadow(0 8px 6px rgba(38, 38, 74, 0.25)); }
 .gift.shaking { animation: gift-shake 0.12s linear infinite; }
 .gift.gone { visibility: hidden; }
@@ -693,7 +698,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
 .chip.on { background: var(--cc); color: #fff; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
-.tile, .sticker, .pick, .chip { animation: pop-in 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 45ms) backwards; }
+.tile, .sticker, .pick, .chip { animation: pop-in 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
 .tile {
   --cc: var(--blue);
   background: #fff;
@@ -912,6 +917,7 @@ body[data-screen='words'] .sun, body[data-screen='real'] .sun, body[data-screen=
   .home .topbar { grid-column: 1 / -1; width: 100%; }
   .home .logo { grid-column: 1; grid-row: 2; align-self: start; margin-top: 0; }
   .home-mascot { grid-column: 1; grid-row: 2; width: 38vh; height: 38vh; align-self: end; margin: 0; }
+  .sun { display: none; }
   .play-btn { grid-column: 2; grid-row: 2; width: 34vh; height: 34vh; }
   .modes { grid-column: 1 / -1; grid-row: 3; padding-top: 6px; }
   .mode-btn { flex-direction: row; justify-content: center; padding: 6px; }

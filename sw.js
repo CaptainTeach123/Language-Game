@@ -4,7 +4,7 @@
  * tools/build-sw.js; VERSION changes whenever any file changes, which makes
  * phones fetch the new version.
  */
-const VERSION = '9a8d93c5a0';
+const VERSION = '4b6decf47d';
 const CACHE = 'word-wizard-' + VERSION;
 const ASSETS = [
   // ASSETS-START
@@ -634,8 +634,9 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  // Fetch fresh copies: the browser's page cache may still hold the previous version of a file.
-  const fresh = ASSETS.map((f) => new Request(f, { cache: 'reload' }));
+  // Check every file with the server: the browser's page cache may still hold the previous
+  // version of a file, but unchanged photos and clips come back as a cheap "not modified".
+  const fresh = ASSETS.map((f) => new Request(f, { cache: 'no-cache' }));
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(fresh)).then(() => self.skipWaiting()));
 });
 

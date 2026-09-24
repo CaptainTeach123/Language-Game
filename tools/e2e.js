@@ -115,6 +115,15 @@ async function run() {
         await tap(page, `.choice:not([aria-label="${info.label}"])`);
         await page.waitForSelector('.choices.reshow[data-ready="1"]', { timeout: 10000 });
         await shot(page, '06-correction.png');
+        // The answer must still be able to glow on the do-over.
+        const glow = await page.evaluate(() => {
+          const t = document.querySelector('.choices.reshow .choice');
+          t.classList.add('hint');
+          const name = getComputedStyle(t).animationName;
+          t.classList.remove('hint');
+          return name;
+        });
+        if (glow !== 'glow') errors.push(`the hint does not glow on the do-over (${glow})`);
       } else if (how === 'wait') {
         await page.waitForSelector('.choice.hint', { timeout: 25000 });
         await shot(page, '05-hint.png');
