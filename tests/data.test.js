@@ -70,13 +70,13 @@ test('every photo file is used, and every sticker has a picture', () => {
   D.EVERYDAY_WORDS.forEach((w) => used.add(path.basename(D.everydayPhoto(w))));
   fs.readdirSync(path.join(ROOT, 'img/photos')).forEach((f) => assert.ok(used.has(f), `unused photo ${f}`));
   assert.ok(!exists('img/words'), 'the old cartoon word pictures are gone');
-  D.STICKERS.forEach((s) => assert.ok(exists(`img/stickers/${s.id}.png`), `${s.id}: missing picture`));
+  D.STICKERS.forEach((s) => assert.ok(exists(`img/stickers/${s.id}.webp`), `${s.id}: missing picture`));
 });
 
 test('photo prompts cover every photo', () => {
   const sheets = require('../tools/photos/prompts.js').sheets();
   const cells = new Set([].concat(...Object.values(sheets).map((s) => s.cells)).filter(Boolean));
-  fs.readdirSync(path.join(ROOT, 'img/photos')).forEach((f) => assert.ok(cells.has(f.replace('.jpg', '')), f));
+  fs.readdirSync(path.join(ROOT, 'img/photos')).forEach((f) => assert.ok(cells.has(f.replace('.webp', '')), f));
 });
 
 test('every picture animation has CSS', () => {
@@ -140,17 +140,17 @@ test('the app is called Word Wizard and the mascot is a wizard', () => {
     assert.ok(read(f).includes('Word Wizard'), f);
     assert.ok(!/Word Buddies|\bPip\b/.test(read(f)), `${f} still mentions the old name`);
   });
-  assert.ok(read('js/app.js').includes('img/ui/wizard.png') && exists('img/ui/wizard.png'), 'the wizard picture');
+  assert.ok(read('js/app.js').includes('img/ui/wizard.webp') && exists('img/ui/wizard.webp'), 'the wizard picture');
 });
 
 test('images referenced by the app exist', () => {
   const src = read('js/app.js');
-  const refs = src.match(/img\/ui\/[a-z-]+\.png/g) || [];
+  const refs = src.match(/img\/ui\/[a-z-]+\.webp/g) || [];
   assert.ok(refs.length > 0);
   refs.forEach((r) => assert.ok(exists(r), `missing ${r}`));
   (src.match(/modeBtn\('([a-z-]+)'/g) || []).forEach((m) => {
     const icon = m.slice(9, -1);
-    assert.ok(exists(`img/ui/${icon}.png`), `missing mode icon ${icon}`);
+    assert.ok(exists(`img/ui/${icon}.webp`), `missing mode icon ${icon}`);
   });
   const html = read('index.html');
   (html.match(/(?:href|src)="([^"]+)"/g) || []).forEach((m) => {
@@ -160,15 +160,19 @@ test('images referenced by the app exist', () => {
   const manifest = JSON.parse(read('manifest.webmanifest'));
   manifest.icons.forEach((i) => assert.ok(exists(i.src), `manifest icon missing ${i.src}`));
   const css = read('css/app.css');
-  fs.readdirSync(path.join(ROOT, 'img/ui')).forEach((f) => assert.ok(src.includes(`img/ui/${f}`) || css.includes(`img/ui/${f}`) || src.includes(`modeBtn('${f.replace('.png', '')}'`), `unused icon ${f}`));
+  fs.readdirSync(path.join(ROOT, 'img/ui')).forEach((f) => assert.ok(src.includes(`img/ui/${f}`) || css.includes(`img/ui/${f}`) || src.includes(`modeBtn('${f.replace('.webp', '')}'`), `unused icon ${f}`));
 });
 
 test('the offline file list is up to date', () => {
   execFileSync(process.execPath, [path.join(ROOT, 'tools/build-sw.js'), '--check'], { stdio: 'pipe' });
   const sw = read('sw.js');
-  const listed = (sw.match(/^ {2}'([^']+)'/gm) || []).map((l) => l.trim().slice(1, -1));
+  const entries = (sw.match(/^ {2}\['([^']+)', '([0-9a-f]+)'\]/gm) || []).map((l) => l.match(/'([^']+)', '([0-9a-f]+)'/).slice(1));
+  const listed = entries.map((e) => e[0]);
   assert.ok(listed.includes('index.html'));
-  assert.ok(listed.includes('img/photos/ball-1.jpg'), 'photos are cached for offline use');
+  assert.ok(listed.includes('img/photos/ball-1.webp'), 'photos are cached for offline use');
+  assert.ok(listed.includes('img/stickers/unicorn.webp'), 'stickers are cached for offline use');
   assert.ok(listed.includes('audio/ball-where.mp3'), 'voice clips are cached for offline use');
-  listed.filter((f) => f !== './').forEach((f) => assert.ok(exists(f), `sw.js lists missing ${f}`));
+  assert.ok(!listed.some((f) => f.startsWith('img/icons/')), 'app icons are for the Home Screen, not the offline cache');
+  entries.forEach(([f, h]) => { assert.ok(exists(f === './' ? 'index.html' : f), `sw.js lists missing ${f}`); assert.equal(h.length, 8); });
+  assert.ok(!fs.readdirSync(path.join(ROOT, 'img/photos')).some((f) => !f.endsWith('.webp')), 'photos are WebP');
 });

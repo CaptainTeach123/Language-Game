@@ -12,8 +12,9 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const SW = path.join(ROOT, 'sw.js');
-const INCLUDE = ['index.html', 'manifest.webmanifest', 'css', 'js', 'fonts', 'img', 'audio'];
-const EXTS = new Set(['.html', '.webmanifest', '.css', '.js', '.woff2', '.png', '.svg', '.jpg', '.mp3']);
+// img/icons is left out: the Home Screen icon is fetched once when the app is added.
+const INCLUDE = ['index.html', 'manifest.webmanifest', 'css', 'js', 'fonts', 'img/ui', 'img/stickers', 'img/photos', 'audio'];
+const EXTS = new Set(['.html', '.webmanifest', '.css', '.js', '.woff2', '.png', '.svg', '.jpg', '.webp', '.mp3']);
 
 function walk(rel) {
   const abs = path.join(ROOT, rel);
@@ -25,9 +26,12 @@ function walk(rel) {
 function build() {
   const files = INCLUDE.flatMap(walk);
   const hash = crypto.createHash('sha256');
-  files.forEach((f) => { hash.update(f); hash.update(fs.readFileSync(path.join(ROOT, f))); });
+  // One hash per file (so a new version can keep unchanged files) and one for the lot.
+  const fileHash = (f) => crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, f))).digest('hex').slice(0, 8);
+  const pairs = files.map((f) => [f, fileHash(f)]);
+  pairs.forEach(([f, h]) => { hash.update(f); hash.update(h); });
   const version = hash.digest('hex').slice(0, 10);
-  const list = ['./'].concat(files).map((f) => `  '${f}'`).join(',\n');
+  const list = [['./', pairs[0][1]]].concat(pairs).map(([f, h]) => `  ['${f}', '${h}']`).join(',\n');
   const src = fs.readFileSync(SW, 'utf8');
   return src
     .replace(/const VERSION = '[^']*';/, `const VERSION = '${version}';`)

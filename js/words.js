@@ -21,7 +21,7 @@
  * best examples of all. See tools/photos/ for how the photos were made.
  *
  * Fields
- *   id      stable key; photos are img/photos/<id>-1.jpg ... <id>-4.jpg, voice clips audio/<id>-*.mp3
+ *   id      stable key; photos are img/photos/<id>-1.webp ... <id>-4.webp, voice clips audio/<id>-*.mp3
  *   word    what is shown and spoken
  *   cat     category id
  *   kind    'name' | 'noun' | 'plural'   (prompt grammar: "Where's Mommy?", "Where's the ball?", "Where are the shoes?")
@@ -29,7 +29,7 @@
  *   anim    small animation on the picture when it is found
  *   phrase  short model sentence for grown-ups and the picture book ({w} = word, {W} = Capitalised)
  *   personal  needs a grown-up's photo before it can be played ("me")
- * Everyday words have one photo (img/photos/<id>.jpg), `life` (how to use
+ * Everyday words have one photo (img/photos/<id>.webp), `life` (how to use
  * the word in routines) and sometimes `sign`.
  */
 (function (root) {
@@ -155,13 +155,13 @@
     if (w.personal) return [];
     var list = [];
     for (var n = 1; n <= PHOTOS_PER_WORD; n++) {
-      list.push({ key: w.id + '@' + n, src: 'img/photos/' + w.id + '-' + n + '.jpg', style: 'photo', tier: n < PHOTOS_PER_WORD ? 'narrow' : 'wide' });
+      list.push({ key: w.id + '@' + n, src: 'img/photos/' + w.id + '-' + n + '.webp', style: 'photo', tier: n < PHOTOS_PER_WORD ? 'narrow' : 'wide' });
     }
     return list;
   }
 
   // The photo for an everyday word.
-  function everydayPhoto(w) { return 'img/photos/' + w.id + '.jpg'; }
+  function everydayPhoto(w) { return 'img/photos/' + w.id + '.webp'; }
 
   function soundAlike(a, b) {
     for (var i = 0; i < SOUND_ALIKE.length; i++) {

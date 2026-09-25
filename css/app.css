@@ -128,7 +128,7 @@ body[data-screen='welcome'] .sun, body[data-screen='words'] .sun, body[data-scre
 .hills {
   position: absolute; left: 0; right: 0; bottom: 0;
   height: calc(var(--castle-h) * 0.45);
-  background: url('../img/ui/hills.png') center bottom / auto 100% repeat-x;
+  background: url('../img/ui/hills.webp') center bottom / auto 100% repeat-x;
 }
 .castle {
   position: absolute; left: 50%; bottom: 0;
@@ -139,7 +139,7 @@ body[data-screen='welcome'] .sun, body[data-screen='words'] .sun, body[data-scre
 /* The picture sits on a pseudo-element so its feathered mask does not clip the sparkles above the roofline. */
 .castle::before {
   content: ''; position: absolute; inset: 0;
-  background: url('../img/ui/castle.png') center bottom / 100% 100% no-repeat;
+  background: url('../img/ui/castle.webp') center bottom / 100% 100% no-repeat;
   -webkit-mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
   mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
 }

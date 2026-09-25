@@ -313,7 +313,7 @@ async function run() {
       };
     });
     if (wide.wizard < 150) errors.push(`wide window: the wizard is ${wide.wizard}px tall`);
-    if (wide.hills < 1700 || !/hills\.png/.test(wide.hillsImg)) errors.push('wide window: the hills do not fill the width');
+    if (wide.hills < 1700 || !/hills\.webp/.test(wide.hillsImg)) errors.push('wide window: the hills do not fill the width');
     if (!wide.castle || Math.abs(wide.castle.left + wide.castle.width / 2 - 892) > 2) errors.push('wide window: the castle is not centered');
     await shot(page, '40-wide-home.png');
     await ctx.close();
@@ -329,7 +329,7 @@ async function run() {
     await page.waitForSelector('.play-btn');
 
     // Photos for a few words, including Mommy (replaces the stock photos) and Anthony.
-    const photoFiles = ['unicorn', 'rocket', 'panda', 'kite'].map((f) => path.join(ROOT, `img/stickers/${f}.png`));
+    const photoFiles = ['unicorn', 'rocket', 'panda', 'kite'].map((f) => path.join(ROOT, `img/stickers/${f}.webp`));
     const photoWords = ['ball', 'dog', 'Mommy', 'Anthony'];
     await page.evaluate(() => window.WB_APP.go('parent', 'words'));
     for (let i = 0; i < photoWords.length; i++) {

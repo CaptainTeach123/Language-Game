@@ -142,14 +142,14 @@
 
   function displayExemplar(w) {
     if (w.everyday) return { key: w.id, src: D.everydayPhoto(w), style: 'photo' };
-    return exemplarsFor(w)[0] || { key: w.id, src: 'img/ui/me.png', style: 'art' };
+    return exemplarsFor(w)[0] || { key: w.id, src: 'img/ui/me.webp', style: 'art' };
   }
 
   // A built-in picture, for icons (never a grown-up's photo).
   function iconSrc(w) {
     if (w.everyday) return D.everydayPhoto(w);
     var ex = D.photos(w)[0];
-    return ex ? ex.src : 'img/ui/me.png';
+    return ex ? ex.src : 'img/ui/me.webp';
   }
 
   // The picture of a word when it's a wrong choice: one of its similar pictures.
@@ -160,7 +160,7 @@
   function picture(w, ex) {
     ex = ex || displayExemplar(w);
     var el = h('div', { class: 'pic' + (ex.style === 'photo' ? ' photo' : '') });
-    var img = h('img', { alt: label(w), draggable: 'false' });
+    var img = h('img', { alt: label(w), draggable: 'false', decoding: 'async' });
     el.appendChild(img);
     if (ex.photo) {
       S.getMediaURL(ex.photo).then(function (url) { img.src = url || iconSrc(w); });
@@ -244,14 +244,19 @@
   var SHARE_SVG = '<svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4" stroke="#2F7BFF" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6v11h12V10h-2" stroke="#2F7BFF" stroke-width="2.2" fill="none" stroke-linejoin="round"/></svg>';
 
   // Anthony's guide: the Word Wizard. Two pictures that differ only in the
-  // mouth (img/ui/wizard.png, wizard-talk.png) take turns while he talks.
+  // mouth (img/ui/wizard.webp, wizard-talk.webp) take turns while he talks.
   // tools/make-icons.js makes the app icon from the first one.
   function mascot(cls) {
+    var base = h('img', { src: 'img/ui/wizard.webp', alt: '', draggable: 'false', fetchpriority: 'high', decoding: 'async' });
+    var talk = h('img', { class: 'talk', alt: '', draggable: 'false', decoding: 'async' });
+    var blink = h('img', { class: 'blink', alt: '', draggable: 'false', decoding: 'async' });
+    // The talking and blinking pictures load once the first one is up, so he shows sooner.
+    function more() { talk.src = 'img/ui/wizard-talk.webp'; blink.src = 'img/ui/wizard-blink.webp'; }
+    if (base.complete && base.naturalWidth) more();
+    else { base.addEventListener('load', more); base.addEventListener('error', more); }
     return h('div', { class: 'mascot' + (cls ? ' ' + cls : '') },
       h('div', { class: 'frames' },
-        h('img', { src: 'img/ui/wizard.png', alt: '', draggable: 'false' }),
-        h('img', { class: 'talk', src: 'img/ui/wizard-talk.png', alt: '', draggable: 'false' }),
-        h('img', { class: 'blink', src: 'img/ui/wizard-blink.png', alt: '', draggable: 'false' }),
+        base, talk, blink,
         h('div', { class: 'wand', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'))));
   }
 
@@ -410,7 +415,7 @@
     return h('button', {
       class: 'icon-btn', 'aria-label': 'Home',
       onclick: function () { Sfx.tap(); (fn || function () { go('home'); })(); }
-    }, h('img', { src: 'img/ui/house.png', alt: '' }));
+    }, h('img', { src: 'img/ui/house.webp', alt: '' }));
   }
   function spacer() { return h('div', { style: 'width:58px;flex:none' }); }
 
@@ -451,6 +456,9 @@
     var grid = h('div', { class: 'pick-grid' });
     PICTURE_WORDS.filter(function (w) { return !w.personal; }).forEach(function (w, i) {
       var tile = h('button', { class: 'pick', style: '--i:' + Math.min(i, 14), 'aria-pressed': 'false', 'aria-label': label(w) }, picture(w), h('span', { text: label(w) }));
+      // Small thumbnails, many of them below the fold: let the wizard load first.
+      tile.querySelector('img').setAttribute('loading', 'lazy');
+      tile.querySelector('img').setAttribute('fetchpriority', 'low');
       tile.addEventListener('click', function () {
         var i = chosen.indexOf(w.id);
         if (i !== -1) chosen.splice(i, 1);
@@ -502,7 +510,7 @@
     return h('button', {
       class: 'mode-btn', style: '--mc:' + color, 'aria-label': text,
       onclick: function () { Sfx.tap(); fn(); }
-    }, h('img', { src: 'img/ui/' + icon + '.png', alt: '' }), h('span', { text: text }));
+    }, h('img', { src: 'img/ui/' + icon + '.webp', alt: '' }), h('span', { text: text }));
   }
 
   SCREENS.home = function () {
@@ -510,7 +518,7 @@
     holdToOpen(gear, 1600, function () { go('parent'); });
 
     var count = h('button', { class: 'sticker-count', 'aria-label': 'My stickers', onclick: function () { Sfx.tap(); go('stickers'); } },
-      h('img', { src: 'img/ui/star.png', alt: '' }), String(stickerTotal()));
+      h('img', { src: 'img/ui/star.webp', alt: '' }), String(stickerTotal()));
 
     var logo = h('h1', { class: 'logo', 'aria-label': 'Word Wizard' });
     var colors = ['#FFC928', '#B07CFF', '#FFD84A', '#9B5DE5']; // wizard gold and purple
@@ -609,7 +617,7 @@
     if (!session) { go('home'); return; }
     var trail = h('div', { class: 'trail', 'aria-hidden': 'true' });
     session.plan.forEach(function () { trail.appendChild(h('i')); });
-    var repeat = h('button', { class: 'icon-btn', 'aria-label': 'Hear it again' }, h('img', { src: 'img/ui/speaker.png', alt: '' }));
+    var repeat = h('button', { class: 'icon-btn', 'aria-label': 'Hear it again' }, h('img', { src: 'img/ui/speaker.webp', alt: '' }));
     repeat.addEventListener('click', function () { if (session && session.repeat) session.repeat(); });
     var body = h('div', { class: 'session' }, topbar(homeButton(leaveSession), trail, repeat));
     session.el = { body: body, trail: trail };
@@ -988,7 +996,7 @@
 
     for (var i = 0; i < 3; i++) {
       (function () {
-        var g = h('button', { class: 'gift', style: '--i:' + i, 'aria-label': 'Present' }, h('img', { src: 'img/ui/gift.png', alt: '' }));
+        var g = h('button', { class: 'gift', style: '--i:' + i, 'aria-label': 'Present' }, h('img', { src: 'img/ui/gift.webp', alt: '' }));
         g.addEventListener('click', function () { open(g); });
         gifts.appendChild(g);
       })();
@@ -1006,7 +1014,7 @@
         save();
         var burst = h('div', { class: 'burst', 'aria-hidden': 'true' });
         for (var b = 0; b < 8; b++) burst.appendChild(h('i', { style: '--a:' + (b * 45 + 20) + 'deg' }));
-        var prize = h('div', { class: 'prize' }, burst, h('img', { src: 'img/stickers/' + st.id + '.png', alt: st.name }));
+        var prize = h('div', { class: 'prize' }, burst, h('img', { src: 'img/stickers/' + st.id + '.webp', alt: st.name }));
         gifts.replaceWith(prize);
         hint.textContent = cap(st.name) + '!';
         Sfx.tada();
@@ -1106,7 +1114,7 @@
       });
       return c;
     }
-    chips.appendChild(chip('all', 'All', '#26264A', 'img/ui/star.png'));
+    chips.appendChild(chip('all', 'All', '#26264A', 'img/ui/star.webp'));
     D.CATEGORIES.forEach(function (c) { chips.appendChild(chip(c.id, c.name, c.color, iconSrc(D.byId[c.icon]))); });
 
     function renderGrid() {
@@ -1198,7 +1206,7 @@
     var grid = h('div', { class: 'grid' });
     D.STICKERS.forEach(function (s, i) {
       var n = state.stickers[s.id] || 0;
-      var img = h('img', { src: 'img/stickers/' + s.id + '.png', alt: n ? s.name : 'Mystery sticker' });
+      var img = h('img', { src: 'img/stickers/' + s.id + '.webp', alt: n ? s.name : 'Mystery sticker', decoding: 'async' });
       var el = h('button', { class: 'sticker' + (n ? '' : ' missing'), style: '--i:' + Math.min(i, 14), 'aria-label': n ? s.name : 'Mystery sticker' },
         img, n > 1 ? h('span', { class: 'count', text: 'x' + n }) : null);
       el.addEventListener('click', function () {
@@ -1765,16 +1773,25 @@
   }
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     var hadController = !!navigator.serviceWorker.controller;
+    // Once the screen is up, ask the offline cache to fetch the photos, stickers and
+    // voice clips in the background (it picks up where it left off on every open).
+    function askPrecache() {
+      var sw = navigator.serviceWorker.controller;
+      if (sw) sw.postMessage({ type: 'precache' });
+    }
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').then(function (reg) {
+        setTimeout(askPrecache, 3000);
         // Look for a new version each time the app comes back to the front.
         document.addEventListener('visibilitychange', function () {
-          if (!document.hidden) reg.update().catch(function () { /* offline */ });
+          if (document.hidden) return;
+          reg.update().catch(function () { /* offline */ });
+          askPrecache();
         });
       }).catch(function () { /* offline support is optional */ });
     });
     navigator.serviceWorker.addEventListener('controllerchange', function () {
-      if (!hadController) { hadController = true; return; } // first install: nothing to swap
+      if (!hadController) { hadController = true; setTimeout(askPrecache, 3000); return; } // first install: nothing to swap
       updateReady = true;
       applyUpdate();
     });

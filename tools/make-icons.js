@@ -9,7 +9,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const ROOT = path.join(__dirname, '..');
-const WIZARD = 'data:image/png;base64,' + fs.readFileSync(path.join(ROOT, 'img/ui/wizard.png')).toString('base64');
+const WIZARD = 'data:image/webp;base64,' + fs.readFileSync(path.join(ROOT, 'img/ui/wizard.webp')).toString('base64');
 
 function page(size, scale) {
   return `<!doctype html><html><head></head><body style="margin:0">

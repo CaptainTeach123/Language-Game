@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Cut the generated 2x2 photo sheets (see tools/photos/prompts.js) into one
-small JPEG per photo:
+small WebP per photo:
 
-    img/photos/<word>-1.jpg ... <word>-4.jpg   picture words (1-3 similar, 4 different-looking)
-    img/photos/<everyday word>.jpg             everyday words
+    img/photos/<word>-1.webp ... <word>-4.webp   picture words (1-3 similar, 4 different-looking)
+    img/photos/<everyday word>.webp              everyday words
 
 Usage:
     pip install pillow
@@ -43,8 +43,8 @@ def main():
             x, y = (i % 2) * cw, (i // 2) * ch
             dx, dy = int(cw * INSET), int(ch * INSET)
             tile = im.crop((x + dx, y + dy, x + cw - dx, y + ch - dy)).resize((SIZE, SIZE), Image.LANCZOS)
-            out = os.path.join(out_dir, cell + '.jpg')
-            tile.save(out, 'JPEG', quality=QUALITY, optimize=True, progressive=True)
+            out = os.path.join(out_dir, cell + '.webp')
+            tile.save(out, 'WEBP', quality=QUALITY, method=6)
             total += os.path.getsize(out)
     print('total %.0f KB' % (total / 1024))
     if missing:

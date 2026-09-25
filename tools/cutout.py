@@ -5,6 +5,7 @@ transparent PNG, trimmed and sized for the app:
 
     pip install pillow
     python3 tools/cutout.py IN.png img/ui/wizard.png [HEIGHT]   (HEIGHT 0 keeps the size)
+    python3 tools/webp.py img/ui/wizard.png                    (then shrink it to WebP)
 
 The white is removed by flooding in from the edges, so white inside the
 character (eyes, teeth, beard) is kept. Edges get a 1 px soft fade.
