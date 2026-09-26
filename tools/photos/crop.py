@@ -18,9 +18,33 @@ import sys
 
 from PIL import Image
 
-SIZE = 520     # plenty for a picture card on a phone at 3x
-INSET = 0.012  # trim a sliver off each edge so the gutter lines never show
+SIZE = 520        # plenty for a picture card on a phone at 3x
+INSET = 0.012     # always trim a sliver off each edge
+WHITE = 238       # a row or column this bright is gutter, not photo...
+MAX_GUTTER = 0.08 # ...unless the white goes on this far: then it's the photo's own white background
+SAFE = 3          # extra pixels past the gutter
 QUALITY = 80
+
+
+def white_edges(tile):
+    """How many rows/columns of white gutter sit at each edge (left, top, right, bottom).
+
+    Sky and night-sky photos show the gutter as a bright line if it isn't found
+    and cut off; white-background photos are simply white all the way in.
+    """
+    g = tile.convert('L')
+    w, h = g.size
+    rows = list(g.resize((1, h), Image.BOX).getdata())
+    cols = list(g.resize((w, 1), Image.BOX).getdata())
+
+    def run(vals, cap):
+        n = 0
+        while n < cap and vals[n] >= WHITE:
+            n += 1
+        return n if n < cap else 0
+
+    return (run(cols, int(w * MAX_GUTTER)), run(rows, int(h * MAX_GUTTER)),
+            run(cols[::-1], int(w * MAX_GUTTER)), run(rows[::-1], int(h * MAX_GUTTER)))
 
 
 def main():
@@ -42,7 +66,15 @@ def main():
                 continue
             x, y = (i % 2) * cw, (i // 2) * ch
             dx, dy = int(cw * INSET), int(ch * INSET)
-            tile = im.crop((x + dx, y + dy, x + cw - dx, y + ch - dy)).resize((SIZE, SIZE), Image.LANCZOS)
+            l, t, r, b = white_edges(im.crop((x, y, x + cw, y + ch)))
+            l, t = max(dx, l + SAFE if l else 0), max(dy, t + SAFE if t else 0)
+            r, b = max(dx, r + SAFE if r else 0), max(dy, b + SAFE if b else 0)
+            # Keep the photo square: trim the longer side evenly.
+            tw, th = cw - l - r, ch - t - b
+            side = min(tw, th)
+            l += (tw - side) // 2
+            t += (th - side) // 2
+            tile = im.crop((x + l, y + t, x + l + side, y + t + side)).resize((SIZE, SIZE), Image.LANCZOS)
             out = os.path.join(out_dir, cell + '.webp')
             tile.save(out, 'WEBP', quality=QUALITY, method=6)
             total += os.path.getsize(out)

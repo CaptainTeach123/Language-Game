@@ -32,7 +32,9 @@ WIN = 0.01             # 10 ms analysis windows
 MIN_GAP = 0.8          # silence this long separates two lines
 MAX_INNER_PAUSE = 1.45 # ...unless there are too many, then pauses shorter than this are joined
 PAD_BEFORE = 0.06
-PAD_AFTER = 0.12
+PAD_AFTER = 0.25      # room for the voice to ring out (a clip that stops dead sounds cut off)
+HANGOVER = 0.15       # a dip this long inside a trailing sound ("s", "k") doesn't end the line
+MAX_PAUSE = 0.4       # a pause inside one line is squeezed to this ("All done! ... No more.")
 FADE = 0.012
 BITRATE = 48
 
@@ -80,22 +82,67 @@ def speech_regions(samples):
     # Grow each region outwards while it's still above a much lower level, so soft
     # starts ("You...") and trailing sounds aren't cut off. Never cross into a neighbour.
     low = max(0.0015, loud * 0.012)
+    hang = int(HANGOVER / WIN)
     grown = []
     for i, (s, e) in enumerate(regions):
         floor = grown[-1][1] + 1 if grown else 0
         ceil = regions[i + 1][0] - 1 if i + 1 < len(regions) else len(rms) - 1
         while s > floor and rms[s - 1] > low:
             s -= 1
-        while e < ceil and rms[e + 1] > low:
-            e += 1
+        j, quiet = e, 0
+        while j < ceil and quiet < hang:
+            j += 1
+            if rms[j] > low:
+                e, quiet = j, 0
+            else:
+                quiet += 1
         grown.append((s, e))
     return [(s * WIN, (e + 1) * WIN) for s, e in grown]
+
+
+def squeeze_pauses(seg):
+    """Shorten any silence inside a line to MAX_PAUSE, joining with a short crossfade."""
+    rms = rms_windows(seg)
+    if not rms:
+        return seg
+    loud = sorted(rms)[int(len(rms) * 0.95)]
+    low = max(0.0015, loud * 0.012)
+    n = int(RATE * WIN)
+    keep_to = int(MAX_PAUSE / WIN / 2)   # windows kept on each side of a long pause
+    drop = []                            # (first window, last window) to remove
+    i = 0
+    while i < len(rms):
+        if rms[i] > low:
+            i += 1
+            continue
+        j = i
+        while j < len(rms) and rms[j] <= low:
+            j += 1
+        if (j - i) * WIN > MAX_PAUSE and i > 0 and j < len(rms):
+            drop.append((i + keep_to, j - keep_to))
+        i = j
+    if not drop:
+        return seg
+    out = array.array('h')
+    pos = 0
+    x = int(0.01 * RATE)  # crossfade length
+    for a, b in drop:
+        out.extend(seg[pos:a * n])
+        pos = b * n
+        # Blend the last 10 ms kept with the first 10 ms after the cut.
+        for k in range(x):
+            if len(out) - x + k < 0 or pos + k >= len(seg):
+                break
+            out[len(out) - x + k] = int(out[len(out) - x + k] * (x - k) / x + seg[pos + k] * k / x)
+        pos += x
+    out.extend(seg[pos:])
+    return out
 
 
 def cut(samples, start, end):
     a = max(0, int((start - PAD_BEFORE) * RATE))
     b = min(len(samples), int((end + PAD_AFTER) * RATE))
-    seg = array.array('h', samples[a:b])
+    seg = squeeze_pauses(array.array('h', samples[a:b]))
     f = int(FADE * RATE)
     for i in range(min(f, len(seg))):
         seg[i] = int(seg[i] * i / f)
