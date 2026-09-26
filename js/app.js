@@ -160,8 +160,16 @@
   function picture(w, ex) {
     ex = ex || displayExemplar(w);
     var el = h('div', { class: 'pic' + (ex.style === 'photo' ? ' photo' : '') });
-    var img = h('img', { alt: label(w), draggable: 'false', decoding: 'async' });
+    // No alt text: a card must never show a word a toddler can't read (the button is labelled).
+    var img = h('img', { alt: '', draggable: 'false', decoding: 'async' });
     el.appendChild(img);
+    // If a picture can't load, show another one of the same word rather than a blank card.
+    var spare = w.everyday ? [] : D.photos(w).map(function (e) { return e.src; }).filter(function (src) { return src !== ex.src; });
+    img.addEventListener('error', function () {
+      if (spare.length) { img.src = spare.shift(); return; }
+      el.classList.add('broken');
+      el.dispatchEvent(new CustomEvent('broken', { bubbles: true }));
+    });
     if (ex.photo) {
       S.getMediaURL(ex.photo).then(function (url) { img.src = url || iconSrc(w); });
     } else img.src = ex.src;
@@ -209,7 +217,9 @@
       learn: [c('here'), { pause: 350 }, c('touch')],
       prompt: [c('where')],
       repeat: [c('find')],
-      hint: [c('here')],
+      hint: [c('here'), { pause: 350 }, c('touch')],
+      touch: [c('touch')],
+      thats: [c('thats')],
       correct: [praise(), { pause: 150 }, c('thats')],
       look: [shared('look')],
       thisIs: [c('this')],
@@ -218,7 +228,8 @@
     };
   }
 
-  // Fetch a session's clips while the grown-up reads the co-play card.
+  // Fetch a session's clips and pictures while the grown-up reads the co-play
+  // card, so a round never asks about a picture that isn't up yet.
   function preloadSession() {
     var names = [shared('look'), shared('did-it-name'), shared('present')]
       .concat(PRAISE.map(shared), PRAISE_NAME.map(shared), CELEBRATE.map(shared));
@@ -226,6 +237,31 @@
       WORD_CLIPS.forEach(function (k) { names.push(id + '-' + k); });
     });
     Speech.preload(names);
+    var srcs = [];
+    sessionWordIds().forEach(function (id) {
+      exemplarsFor(D.byId[id]).forEach(function (e) { if (e.src) srcs.push(e.src); });
+    });
+    PICTURE_WORDS.forEach(function (w) {
+      var e = D.photos(w)[0];
+      if (e && available(w.id)) srcs.push(e.src);
+    });
+    srcs.forEach(function (src) { var im = new Image(); im.decoding = 'async'; im.src = src; });
+  }
+
+  // Call back once every picture inside `el` is up (or after a short wait).
+  function whenShown(el, cb) {
+    var imgs = Array.prototype.slice.call(el.querySelectorAll('img'));
+    var pending = imgs.filter(function (i) { return !(i.complete && i.naturalWidth); });
+    if (!pending.length) { cb(); return; }
+    var done = false;
+    var finish = function () { if (!done) { done = true; cb(); } };
+    var left = pending.length;
+    pending.forEach(function (i) {
+      var one = function () { if (--left <= 0) finish(); };
+      i.addEventListener('load', one, { once: true });
+      i.addEventListener('error', one, { once: true });
+    });
+    setTimeout(finish, 2500);
   }
 
   /* ------------------------------------------------------------------ */
@@ -619,19 +655,44 @@
     session.plan.forEach(function () { trail.appendChild(h('i')); });
     var repeat = h('button', { class: 'icon-btn', 'aria-label': 'Hear it again' }, h('img', { src: 'img/ui/speaker.webp', alt: '' }));
     repeat.addEventListener('click', function () { if (session && session.repeat) session.repeat(); });
-    var body = h('div', { class: 'session' }, topbar(homeButton(leaveSession), trail, repeat));
+    // Leaving is for grown-ups: press and hold, so a stray tap can't end the game.
+    var leave = h('button', { class: 'icon-btn hold-btn', 'aria-label': 'Grown-ups: press and hold to stop', html: '<img src="img/ui/house.webp" alt="">' + RING_SVG });
+    holdToOpen(leave, 1600, leaveSession);
+    var body = h('div', { class: 'session' }, topbar(leave, trail, repeat));
     session.el = { body: body, trail: trail };
     app.appendChild(body);
     showRound();
   };
 
+  // Time actually played (the clock stops while the app is in the background).
+  function sessionSeconds() {
+    var ms = Date.now() - session.started;
+    return Math.min(ms / 1000, state.settings.maxMinutes * 60 + 60);
+  }
+
   function leaveSession() {
     if (session && session.started && session.done) {
-      P.finishSession(state, session.id, (Date.now() - session.started) / 1000, Date.now());
+      P.finishSession(state, session.id, sessionSeconds(), Date.now());
     }
     save();
     session = null;
     go('home');
+  }
+
+  // The phone locked, a call came in, or the app went to the background:
+  // freeze the round (nothing is logged) and start it again on return.
+  function pauseSession() {
+    if (!session || screenName !== 'session' || session.pausedAt) return;
+    clearTimers();
+    Speech.stop();
+    session.token += 1;
+    session.pausedAt = Date.now();
+  }
+  function resumeSession() {
+    if (!session || screenName !== 'session' || !session.pausedAt) return;
+    session.started += Date.now() - session.pausedAt;
+    session.pausedAt = 0;
+    if (session.logged) nextRound(); else showRound();
   }
 
   function updateTrail() {
@@ -646,6 +707,8 @@
     Speech.stop();
     session.token += 1;
     session.repeat = null;
+    session.retryVoice = null;
+    session.logged = false;
     var old = session.el.body.querySelectorAll('.stage');
     Array.prototype.forEach.call(old, function (n) { n.remove(); });
     var r = session.plan[session.idx];
@@ -725,7 +788,7 @@
   }
 
   function endSession() {
-    P.finishSession(state, session.id, (Date.now() - session.started) / 1000, Date.now());
+    P.finishSession(state, session.id, sessionSeconds(), Date.now());
     save();
     go('reward');
   }
@@ -742,25 +805,49 @@
 
   // Ignore two-finger or palm touches and rapid repeat taps.
   function tapFilter(area) {
-    var down = 0;
+    var down = {};
     var multi = false;
     var lastTap = 0;
+    var fingers = function () { return Object.keys(down).length; };
     area.addEventListener('pointerdown', function (e) {
-      down += 1;
-      if (down > 1 || (e.width || 0) > 80 || (e.height || 0) > 80) multi = true;
+      down[e.pointerId] = 1;
+      if (fingers() > 1 || (e.width || 0) > 80 || (e.height || 0) > 80) multi = true;
     }, true);
-    var up = function () {
-      down = Math.max(0, down - 1);
-      if (!down) setTimeout(function () { multi = false; }, 60);
+    var up = function (e) {
+      delete down[e.pointerId];
+      if (!fingers()) setTimeout(function () { multi = false; }, 60);
     };
-    area.addEventListener('pointerup', up, true);
-    area.addEventListener('pointercancel', up, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+    onLeave(function () { window.removeEventListener('pointerup', up, true); window.removeEventListener('pointercancel', up, true); });
     return function () {
       var now = Date.now();
       if (multi || now - lastTap < TAP_GAP_MS) return false;
       lastTap = now;
       return true;
     };
+  }
+
+  // The wizard could not speak (no clip yet, or the phone took the sound
+  // away): tell the grown-up and let a tap on the wizard try again. Nothing is
+  // scored until the word has really been said.
+  function voiceTrouble(s, retry) {
+    var was = s.bubble.textContent;
+    s.bubble.textContent = 'The wizard lost his voice. Check the sound and the internet, then tap him to try again.';
+    s.bubble.classList.add('quiet');
+    s.guide.classList.add('nudge');
+    var once = function () {
+      s.guide.removeEventListener('click', once);
+      if (session) session.retryVoice = null;
+      s.bubble.textContent = was;
+      s.bubble.classList.remove('quiet');
+      s.guide.classList.remove('nudge');
+      A.unlock();
+      retry();
+    };
+    s.guide.addEventListener('click', once);
+    if (session) { session.retryVoice = once; session.repeat = once; }
+    onLeave(function () { s.guide.removeEventListener('click', once); });
   }
 
   /* Meet the word: one picture, "Here's the ball! Touch the ball." */
@@ -776,6 +863,7 @@
     var accept = tapFilter(card);
     var ready = false;
     var finished = false;
+    var token = 0;
     s.main.appendChild(card);
     s.stage.appendChild(next);
     P.recordExposure(state, w.id, Date.now());
@@ -787,25 +875,34 @@
       finished = true;
       card.classList.remove('tap-me');
       card.classList.add('right');
+      s.guide.classList.remove('listening');
       animatePic(pic, w);
       Sfx.correct();
       Speech.say(L.correct).then(function () { rc.done(true); });
       later(function () { rc.done(true); }, 6000);
     });
 
+    // Taps count as soon as the word has been named ("Here's Mommy!").
     var begin = function () {
-      if (ready || !rc.alive()) return;
+      if (ready || finished || !rc.alive()) return;
       ready = true;
       card.classList.add('tap-me');
       card.parentNode && card.parentNode.setAttribute('data-ready', '1');
+      s.guide.classList.add('listening');
       later(function () { if (!finished) Speech.say(L.repeat); }, WAIT_MS);
       later(function () { if (!finished) next.classList.remove('hidden'); }, WAIT_MS * 2);
     };
+    var meet = [L.learn[0], { run: function (silent) { if (!silent) begin(); } }, { pause: 350 }, L.learn[2]];
+    function intro() {
+      var my = ++token;
+      later(function () { if (my === token && !ready && !finished) voiceTrouble(s, intro); }, 9000);
+      Speech.say(meet).then(function (ok) {
+        if (my !== token || !rc.alive() || finished) return;
+        if (ok === 'silent' && !ready) voiceTrouble(s, intro);
+      });
+    }
     session.repeat = function () { return Speech.say(L.learn); };
-    later(function () {
-      Speech.say(L.learn).then(function (ok) { if (ok) begin(); });
-    }, LOOK_MS);
-    later(begin, 5000); // in case speech never finishes
+    whenShown(card, function () { if (rc.alive()) later(intro, LOOK_MS); });
   }
 
   /* Find it: "Where's the ball?" among 2-4 pictures. */
@@ -814,7 +911,8 @@
     var check = round.check;
     var level = check === 'learning' ? st.level : (check === 'bonus' ? 1 : 3);
     var field = P.fieldSize(level);
-    var pool = PICTURE_WORDS.filter(function (x) { return available(x.id); });
+    // Wrong choices come from words in play (a paused word stays out of sight).
+    var pool = PICTURE_WORDS.filter(function (x) { return available(x.id) && !P.isPaused(state, x.id); });
     var foils = P.pickFoils(pool, w, field - 1, state, { level: level, soundAlike: D.soundAlike });
     field = foils.length + 1;
     var ex = P.chooseExemplar(st, exemplarsFor(w), check, Math.random) || exemplarsFor(w)[0];
@@ -826,9 +924,10 @@
     var buttons = {};
     var targetBtn = null;
     var locked = true;
-    var mode = 'first';        // 'first' | 'hint' | 'correction' | 'over'
+    var mode = 'first';        // 'first' | 'look' | 'model' | 'correction' | 'hint' | 'over'
     var responded = false;     // first response logged?
     var waitToken = 0;
+    var broken = false;        // the target's photo could not be shown
 
     function build(pos) {
       var order = P.shuffle(foils, Math.random);
@@ -840,7 +939,10 @@
           var btn = h('button', { class: 'card choice', 'aria-label': label(ww) }, picture(ww, id === w.id ? ex : foilExemplar(ww)));
           btn.addEventListener('click', function () { tap(id, btn); });
           buttons[id] = btn;
-          if (id === w.id) targetBtn = btn;
+          if (id === w.id) {
+            targetBtn = btn;
+            btn.addEventListener('broken', function () { broken = true; });
+          }
         }
         buttons[id].className = 'card choice';
         buttons[id].style.setProperty('--i', grid.children.length);
@@ -856,51 +958,74 @@
     function log(outcome) {
       if (responded || check === 'bonus') return;
       responded = true;
+      session.logged = true;
       P.recordTrial(state, w.id, outcome, { session: session.id, exemplar: ex.key }, Date.now());
       save();
     }
 
+    function lock() {
+      locked = true;
+      grid.removeAttribute('data-ready');
+      s.guide.classList.remove('listening');
+    }
     function unlock() {
       if (!rc.alive() || mode === 'over') return;
+      if (broken && !responded) { skip(); return; }
       locked = false;
       grid.setAttribute('data-ready', '1');
+      s.guide.classList.add('listening');
+    }
+    // A round the game could not show properly is dropped, not scored.
+    function skip() {
+      mode = 'over';
+      waitToken += 1;
+      lock();
+      rc.done(false, 0);
+    }
+    function voiceProblem() {
+      if (!rc.alive() || mode === 'over') return;
+      waitToken += 1;
+      lock();
+      voiceTrouble(s, function () { ask(L.prompt); });
     }
 
     // Ask, then wait; ask again; then show the answer as a hint.
     function ask(parts) {
-      locked = true;
-      grid.removeAttribute('data-ready');
+      lock();
       var my = ++waitToken;
-      later(function () { if (my === waitToken) unlock(); }, 5000); // in case speech never finishes
-      return Speech.say(parts).then(function () {
+      later(function () { if (my === waitToken) voiceProblem(); }, 9000); // the clip never came
+      return Speech.say(parts).then(function (ok) {
         if (my !== waitToken || !rc.alive()) return;
+        if (ok !== true) { if (ok === 'silent') voiceProblem(); return; }
         unlock();
         later(function () {
           if (my !== waitToken || mode === 'over') return;
           Speech.say(L.repeat);
-          later(function () { if (my === waitToken && mode !== 'over') showHint(); }, WAIT_MS + 1500);
+          later(function () { if (my === waitToken && mode !== 'over') showHint(); }, WAIT_MS);
         }, WAIT_MS);
       });
     }
 
+    // "Here's the ball! Touch the ball!" with the answer glowing (logged as prompted).
     function showHint() {
-      if (mode === 'first') { mode = 'hint'; log('prompted'); }
+      if (mode === 'first') { mode = 'hint'; log('prompted'); } else mode = 'hint';
       waitToken += 1;
+      var my = waitToken;
       targetBtn.classList.add('hint');
       Speech.say(L.hint);
-      var my = waitToken;
+      later(function () { if (my === waitToken && mode === 'hint') Speech.say(L.touch); }, 4500);
       later(function () {
         if (my !== waitToken || mode === 'over') return;
         mode = 'over';
         Speech.say(L.word).then(function () { rc.done(false); });
         later(function () { rc.done(false); }, 4000);
-      }, 9000);
+      }, 7000);
     }
 
     function found(btn) {
       mode = 'over';
       waitToken += 1;
-      locked = true;
+      lock();
       btn.classList.remove('hint');
       btn.classList.add('right');
       Object.keys(buttons).forEach(function (id) { if (buttons[id] !== btn) buttons[id].classList.add('fade'); });
@@ -912,6 +1037,25 @@
 
     function tap(id, btn) {
       if (locked || mode === 'over' || !accept()) return;
+      if (mode === 'model') {
+        // He is copying the answer he was just shown: welcome it (not scored), then the do-over.
+        if (id !== w.id) {
+          targetBtn.classList.remove('hint');
+          void targetBtn.offsetWidth;
+          targetBtn.classList.add('hint');
+          Speech.say(L.touch);
+          return;
+        }
+        waitToken += 1;
+        lock();
+        btn.classList.remove('hint');
+        btn.classList.add('right');
+        animatePic(btn.querySelector('.pic'), w);
+        var my = waitToken;
+        Speech.say(L.thats).then(function () { if (rc.alive() && my === waitToken) later(correction, 400); });
+        later(function () { if (rc.alive() && my === waitToken) correction(); }, 4000);
+        return;
+      }
       if (id === w.id) {
         if (mode === 'first') log('correct');
         if (mode === 'correction') P.recordCorrection(state, w.id, true);
@@ -930,7 +1074,7 @@
         // Second miss: show the answer calmly and move on.
         mode = 'over';
         waitToken += 1;
-        locked = true;
+        lock();
         btn.classList.add('dim');
         targetBtn.classList.add('hint');
         Speech.say(L.thisIs).then(function () { rc.done(false, 1200); });
@@ -940,15 +1084,19 @@
       log('error');
       mode = 'look';
       waitToken += 1;
-      locked = true;
+      lock();
       btn.classList.add('dim');
+      var mine = waitToken;
       Speech.say(L.look).then(function () {
-        if (!rc.alive()) return null;
+        if (!rc.alive() || mine !== waitToken) return null;
         targetBtn.classList.add('hint');
-        return Speech.say(L.thisIs);
-      }).then(function () {
-        if (!rc.alive()) return;
-        later(correction, 700);
+        return Speech.say(L.thisIs.concat([{ pause: 300 }], L.touch));
+      }).then(function (ok) {
+        if (ok === null || !rc.alive() || mine !== waitToken) return;
+        mode = 'model';
+        locked = false;
+        grid.setAttribute('data-ready', '1');
+        later(function () { if (mine === waitToken && mode === 'model') correction(); }, 5000);
       });
     }
 
@@ -956,17 +1104,18 @@
     function correction() {
       if (!rc.alive()) return;
       mode = 'correction';
+      waitToken += 1;
+      lock();
       var newPos = P.placeTarget(field, Array.prototype.indexOf.call(grid.children, targetBtn), Math.random);
       build(newPos);
       grid.classList.remove('reshow');
       void grid.offsetWidth;
       grid.classList.add('reshow');
-      grid.removeAttribute('data-ready');
       later(function () { ask(L.prompt); }, LOOK_MS); // a quiet look at the moved pictures first
     }
 
     session.repeat = function () { if (mode !== 'over' && !locked) Speech.say(L.prompt); };
-    later(function () { ask(L.prompt); }, LOOK_MS);
+    whenShown(grid, function () { if (rc.alive()) later(function () { ask(L.prompt); }, LOOK_MS); });
   }
 
   /* ------------------------------------------------------------------ */
@@ -1020,8 +1169,9 @@
         Sfx.tada();
         FX.fromEl(prize, 60);
         cheerMascot();
-        Speech.say([shared('got-' + st.id)]);
-        after.appendChild(carryover(played));
+        Speech.say([shared('got-' + st.id)]).then(function () {
+          later(function () { after.appendChild(carryover(played)); after.classList.add('in'); }, 900);
+        });
       }, 1000);
     }
 
@@ -1756,10 +1906,22 @@
 
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
+      pauseSession();
       Speech.stop();
+      A.keepAlive(false);
       S.saveState(state, true);
+    } else {
+      A.keepAlive(true);
+      resumeSession();
     }
   });
+  // A call, Siri or the lock screen takes the sound away: freeze the round, restart it when sound is back.
+  Speech.onSuspend = function () { pauseSession(); };
+  Speech.onResume = function () {
+    if (document.hidden) return;
+    if (session && session.retryVoice) session.retryVoice();
+    else resumeSession();
+  };
   window.addEventListener('pagehide', function () { S.saveState(state, true); });
 
   // Updates: the offline cache keeps serving the old version until a new
