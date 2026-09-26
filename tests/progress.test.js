@@ -351,3 +351,121 @@ test('date math works across month ends and daylight saving changes', () => {
   assert.equal(P.addDays('2026-10-31', 2), '2026-11-02');
   assert.equal(P.addDays('2026-12-31', 1), '2027-01-01');
 });
+
+/* ---------------- Rules found by the quality audit ---------------- */
+
+test('every learning word that plays gets at least 2 finds, so words take turns when there is little room', () => {
+  const s = fresh();
+  s.settings.learningCap = 6;
+  ['mommy', 'daddy', 'baby', 'dog', 'cat', 'cow'].forEach((id, i) => { P.introduce(s, id, T0); P.stat(s, id).trials = 2; P.stat(s, id).seen = 1; P.stat(s, id).last = T0 + i; });
+  ['duck', 'pig', 'bird'].forEach((id) => { toReview(s, id, T0); P.stat(s, id).due = P.dayKey(day(10)); });
+  P.setKnown(s, 'fish', true, T0); P.stat(s, 'fish').due = P.dayKey(day(10));
+  s.sessionCount = 5;
+  const { plan } = P.planSession(s, D.START_ORDER, { trials: 10, rng: seeded(4) }, day(10));
+  const finds = {};
+  plan.filter((r) => r.type === 'find' && r.check === 'learning').forEach((r) => { finds[r.id] = (finds[r.id] || 0) + 1; });
+  assert.ok(Object.keys(finds).length >= 2, 'more than one learning word plays');
+  Object.keys(finds).forEach((id) => assert.ok(finds[id] >= 2, `${id} gets at least 2 finds, got ${finds[id]}`));
+  // Next session, the words that waited come first.
+  const seen = Object.keys(finds);
+  seen.forEach((id) => { P.stat(s, id).last = day(10) + 1000; });
+  const next = P.planSession(s, D.START_ORDER, { trials: 10, rng: seeded(5) }, day(11));
+  const nextIds = next.plan.filter((r) => r.check === 'learning').map((r) => r.id);
+  assert.ok(nextIds.some((id) => seen.indexOf(id) === -1), 'a word that waited plays next time');
+});
+
+test('with default settings a word that is always right keeps moving up', () => {
+  const s = fresh();
+  ['mommy', 'daddy', 'baby', 'dog', 'cat', 'cow'].forEach((id) => { P.introduce(s, id, T0); P.stat(s, id).seen = 1; });
+  ['duck', 'pig', 'bird'].forEach((id) => toReview(s, id, T0));
+  P.setKnown(s, 'fish', true, T0);
+  s.sessionCount = 5;
+  for (let n = 0; n < 30; n++) {
+    const when = day(2 + n);
+    const { plan } = P.planSession(s, D.START_ORDER, { trials: 10, rng: seeded(n) }, when);
+    plan.forEach((r, i) => { if (r.type === 'find') P.recordTrial(s, r.id, 'correct', { session: when, exemplar: r.id + '@' + (1 + i % 2) }, when + i); });
+    P.finishSession(s, when, 60, when + 100);
+  }
+  const st = P.peek(s, 'mommy');
+  assert.ok(st.state !== 'learning' || st.level >= 3, `mommy should have moved up, is ${st.state} level ${st.level}`);
+});
+
+test('a word started by a grown-up (or planned but never played) is met with one big picture first', () => {
+  const s = fresh();
+  s.sessionCount = 5;
+  s.settings.learningCap = 2;
+  P.introduce(s, 'ball', T0);
+  P.introduce(s, 'dog', T0); P.stat(s, 'dog').trials = 4; P.stat(s, 'dog').seen = 1;
+  const { plan, newWords } = P.planSession(s, D.START_ORDER, { trials: 10, rng: seeded(3) }, day(1));
+  assert.deepEqual(newWords, [], 'Learning is full, so nothing new starts');
+  const intros = plan.filter((r) => r.id === 'ball' && r.type === 'learn');
+  assert.equal(intros.length, 1, 'ball gets its Here\'s-the-ball round');
+  assert.ok(plan.findIndex((r) => r.id === 'ball' && r.type === 'find') > plan.indexOf(intros[0]), 'met before tested');
+});
+
+test('old sessions at a level do not count again after the word comes back to it', () => {
+  const s = fresh();
+  P.introduce(s, 'car', T0);
+  session(s, 'car', ['correct', 'correct'], T0);                      // 1 -> 2
+  session(s, 'car', ['correct', 'correct', 'correct'], day(1));         // level 2, 3/3
+  session(s, 'car', ['correct', 'correct'], day(2));                    // level 2 -> 3
+  assert.equal(P.peek(s, 'car').level, 3);
+  session(s, 'car', ['error', 'error'], day(3));
+  session(s, 'car', ['error', 'error'], day(4));                        // drop to 2
+  assert.equal(P.peek(s, 'car').level, 2);
+  session(s, 'car', ['correct', 'correct'], day(5));                    // ONE good session at level 2
+  assert.equal(P.peek(s, 'car').level, 2, 'one good session is not enough to go back up');
+  session(s, 'car', ['correct', 'correct'], day(6));
+  assert.equal(P.peek(s, 'car').level, 3, 'two good sessions are');
+});
+
+test('mastered words are checked only when due, and no word plays more than 4 times a session', () => {
+  const s = fresh();
+  P.setKnown(s, 'apple', true, T0);
+  P.setKnown(s, 'ball', true, T0);
+  s.sessionCount = 5;
+  const soon = P.planSession(s, D.START_ORDER, { trials: 10, rng: seeded(1) }, day(1));
+  assert.equal(soon.plan.filter((r) => r.check === 'maint').length, 0, 'no check the day after marking words as known');
+  const later = P.planSession(s, D.START_ORDER, { trials: 10, rng: seeded(1) }, day(15));
+  assert.ok(later.plan.some((r) => r.check === 'maint'), 'checked once the 14 days are up');
+  const per = {};
+  later.plan.forEach((r) => { per[r.id] = (per[r.id] || 0) + 1; });
+  Object.keys(per).forEach((id) => assert.ok(per[id] <= 4, `${id} x${per[id]}`));
+});
+
+test('learning never shows the same photo twice running; the two review checks use the wide then the held photo', () => {
+  const ex = D.photos(D.byId.ball);
+  const st = P.newStat();
+  st.lastEx = 'ball@1';
+  for (let seed = 0; seed < 30; seed++) assert.notEqual(P.chooseExemplar(st, ex, 'learning', seeded(seed)).key, 'ball@1');
+  st.exSeen = ['ball@1', 'ball@2'];
+  st.state = 'review'; st.reviewStep = 0;
+  assert.equal(P.chooseExemplar(st, ex, 'review', seeded(1)).tier, 'wide');
+  st.exSeen.push('ball@4'); st.reviewStep = 1;
+  assert.equal(P.chooseExemplar(st, ex, 'review', seeded(1)).tier, 'held');
+});
+
+test('a paused word is never a wrong-answer picture', () => {
+  const s = fresh();
+  P.introduce(s, 'cookie', T0);
+  P.pause(s, 'cookie');
+  for (let seed = 0; seed < 20; seed++) {
+    const foils = P.pickFoils(D.PICTURE_WORDS, D.byId.dog, 3, s, { level: 3, rng: seeded(seed), soundAlike: D.soundAlike });
+    assert.ok(foils.indexOf('cookie') === -1);
+  }
+});
+
+test('a word marked as already understood, then missed twice, gets a First introduced date', () => {
+  const s = fresh();
+  P.setKnown(s, 'hat', true, T0);
+  P.recordTrial(s, 'hat', 'error', { session: 1 }, day(20));
+  P.recordTrial(s, 'hat', 'error', { session: 1 }, day(20) + 1);
+  assert.equal(P.peek(s, 'hat').state, 'learning');
+  assert.equal(P.peek(s, 'hat').introduced, P.dayKey(day(20)));
+});
+
+test('days practiced counts calendar days (a session on each of the last 3 days)', () => {
+  const s = fresh();
+  [0, 1, 2].forEach((d) => { s.days[P.addDays(P.dayKey(day(10)), -d)] = { trials: 3, correct: 2, heard: 0, sessions: 1, seconds: 60 }; });
+  assert.equal(P.daysPracticed(s, day(10) + 30 * 60 * 1000, 7), 3);
+});

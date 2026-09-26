@@ -22,7 +22,7 @@ test('the introduction order covers every picture word exactly once', () => {
   assert.deepEqual([...D.START_ORDER].sort(), D.PICTURE_WORDS.map((w) => w.id).sort());
 });
 
-test('every picture word is concrete and has real photos: 3 similar, 1 different-looking', () => {
+test('every picture word is concrete and has real photos: 2 similar to learn from, 1 similar held for the second check, 1 different-looking', () => {
   const kinds = new Set(['name', 'noun', 'plural']);
   D.PICTURE_WORDS.forEach((w) => {
     assert.ok(D.catById[w.cat] && !D.catById[w.cat].everyday, `${w.id}: category`);
@@ -33,7 +33,8 @@ test('every picture word is concrete and has real photos: 3 similar, 1 different
       assert.equal(ex.length, 0, 'Anthony is only ever shown in a grown-up\'s photo');
       return;
     }
-    assert.equal(ex.filter((e) => e.tier === 'narrow').length, 3, `${w.id}: 3 similar photos`);
+    assert.equal(ex.filter((e) => e.tier === 'narrow').length, 2, `${w.id}: 2 similar photos for learning`);
+    assert.equal(ex.filter((e) => e.tier === 'held').length, 1, `${w.id}: 1 similar photo held back`);
     assert.equal(ex.filter((e) => e.tier === 'wide').length, 1, `${w.id}: 1 different-looking photo`);
     ex.forEach((e) => {
       assert.equal(e.style, 'photo');

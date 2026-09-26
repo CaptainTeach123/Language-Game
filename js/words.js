@@ -155,7 +155,8 @@
     if (w.personal) return [];
     var list = [];
     for (var n = 1; n <= PHOTOS_PER_WORD; n++) {
-      list.push({ key: w.id + '@' + n, src: 'img/photos/' + w.id + '-' + n + '.webp', style: 'photo', tier: n < PHOTOS_PER_WORD ? 'narrow' : 'wide' });
+      list.push({ key: w.id + '@' + n, src: 'img/photos/' + w.id + '-' + n + '.webp', style: 'photo',
+        tier: n === PHOTOS_PER_WORD ? 'wide' : (n === PHOTOS_PER_WORD - 1 ? 'held' : 'narrow') });
     }
     return list;
   }

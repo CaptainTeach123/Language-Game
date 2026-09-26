@@ -20,7 +20,12 @@
  * Only UNPROMPTED first taps count as correct. If the child needed a hint,
  * the trial is logged as "prompted", which doesn't count toward progress.
  * Sessions are about 60% learning words, 30% review, 10% mastered, and new
- * words join 1-2 at a time, only while few words are being learned.
+ * words join 1-2 at a time, only while few words are being learned. Every
+ * learning word that plays gets at least 2 finds in a session (the level
+ * rules need 3 trials over 2 sessions), so with little room the learning
+ * words take turns. Each word has similar pictures ("narrow") for learning,
+ * one similar picture held back ("held") for the second review check, and a
+ * different-looking one ("wide") for the first.
  *
  * Plain data in, plain data out, so it is unit tested in Node (tests/).
  */
@@ -96,13 +101,14 @@
       due: '',           // day the next review or maintenance check is due
       exSeen: [],        // pictures this word has been tested with
       lastEx: '',
-      last: 0,
+      last: 0,           // last time the word was named or tested
+      lastTrial: 0,      // last find-the-picture trial
       known: false       // a grown-up says the child already understands it
     };
   }
 
   var STAT_KEYS = Object.keys(newStat());
-  var NUM_KEYS = ['level', 'seen', 'trials', 'correct', 'errors', 'prompted', 'corrections', 'run', 'missRun', 'reviewStep', 'last'];
+  var NUM_KEYS = ['level', 'seen', 'trials', 'correct', 'errors', 'prompted', 'corrections', 'run', 'missRun', 'reviewStep', 'last', 'lastTrial'];
 
   function recentAcc(recent) {
     if (!recent || !recent.length) return 0;
@@ -234,7 +240,12 @@
     return st;
   }
 
-  function demote(st, level) {
+  // Old sessions at a level must not count again after the word comes back to it.
+  function forgetLevel(st, level) {
+    st.hist = st.hist.filter(function (h) { return h.l !== level; });
+  }
+
+  function demote(st, level, today) {
     st.state = 'learning';
     st.level = level;
     st.reviewStep = 0;
@@ -243,6 +254,8 @@
     st.known = false;
     st.run = 0;
     st.missRun = 0;
+    if (!st.introduced && today) st.introduced = today;
+    forgetLevel(st, level);
   }
 
   function recordExposure(state, id, now) {
@@ -271,7 +284,11 @@
     if (outcome === 'error') st.errors += 1;
     if (outcome === 'prompted') st.prompted += 1;
     st.last = now;
-    if (info.exemplar && st.exSeen.indexOf(info.exemplar) === -1) st.exSeen.push(info.exemplar);
+    st.lastTrial = now;
+    if (info.exemplar) {
+      st.lastEx = info.exemplar;
+      if (st.exSeen.indexOf(info.exemplar) === -1) st.exSeen.push(info.exemplar);
+    }
 
     var log = dayLog(state, now);
     log.trials += 1;
@@ -288,11 +305,10 @@
       h.n += 1;
       if (ok) h.ok += 1;
       // Two pictures is a coin flip, so move on quickly.
-      if (st.level === 1 && st.run >= 2) { st.level = 2; st.run = 0; }
+      if (st.level === 1 && st.run >= 2) { st.level = 2; st.run = 0; forgetLevel(st, 2); }
     } else if (st.state === 'review') {
       if (ok) {
         st.reviewStep += 1;
-        st.lastEx = info.exemplar || '';
         if (st.reviewStep >= REVIEW_GAPS.length) {
           st.state = 'mastered';
           st.masteredOn = today;
@@ -302,7 +318,7 @@
           st.due = addDays(today, REVIEW_GAPS[st.reviewStep]);
         }
       } else if (st.missRun >= 2) {
-        demote(st, MAX_LEVEL);
+        demote(st, MAX_LEVEL, today);
       } else {
         st.due = addDays(today, 1);
       }
@@ -310,9 +326,8 @@
       if (ok) {
         st.reviewStep = Math.min(st.reviewStep + 1, MAINT_GAPS.length - 1);
         st.due = addDays(today, MAINT_GAPS[st.reviewStep]);
-        st.lastEx = info.exemplar || '';
       } else if (st.missRun >= 2) {
-        demote(st, 2);
+        demote(st, 2, today);
       } else {
         st.due = addDays(today, 1);
       }
@@ -338,6 +353,7 @@
       if (st.level < MAX_LEVEL) {
         st.level += 1;
         st.run = 0;
+        forgetLevel(st, st.level);
       } else if (last2[0].d !== last2[1].d) {
         st.state = 'review';
         st.reviewStep = 0;
@@ -348,6 +364,7 @@
     } else if (st.level > 1 && last2.every(function (h) { return h.ok / h.n < DROP; })) {
       st.level -= 1;
       st.run = 0;
+      forgetLevel(st, st.level);
     }
   }
 
@@ -428,9 +445,11 @@
       learning = learning.concat(newWords);
     }
 
-    var reviewDue = by('review').filter(function (id) { var d = peek(state, id).due; return !d || d <= today; });
+    var due = function (id) { var d = peek(state, id).due; return !d || d <= today; };
+    var reviewDue = by('review').filter(due);
     reviewDue.sort(function (a, b) { return peek(state, a).due < peek(state, b).due ? -1 : 1; });
-    var mastered = by('mastered');
+    // Mastered words come back only when their check is due (14, 30, then 60 days).
+    var mastered = by('mastered').filter(due);
     mastered.sort(function (a, b) { return (peek(state, a).due || '') < (peek(state, b).due || '') ? -1 : 1; });
 
     var nMaint = mastered.length ? Math.min(mastered.length, Math.max(1, Math.round(N * 0.1))) : 0;
@@ -439,20 +458,34 @@
     var nLearn = learning.length ? N - nMaint - nReview : 0;
     if (!learning.length && !reviewDue.length) nMaint = mastered.length ? N : 0;
 
-    // One-picture "meet the word" trials: new words, plus two in the very
-    // first session so the child learns what tapping does.
+    // One-picture "meet the word" trials: words never met before (new this
+    // session, or started by a grown-up and not yet played), plus two in the
+    // very first session so the child learns what tapping does.
     var intro = newWords.slice();
+    learning.forEach(function (id) {
+      var st = peek(state, id);
+      if (!st.trials && !st.seen && intro.indexOf(id) === -1) intro.push(id);
+    });
     var firstEver = state.sessionCount === 0 && ids.every(function (id) { return !peek(state, id).trials; });
     if (firstEver) {
       learning.forEach(function (id) { if (intro.length < 2 && intro.indexOf(id) === -1) intro.push(id); });
     }
-    intro = intro.slice(0, Math.max(0, nLearn - 1));
+    intro = intro.slice(0, Math.min(2, Math.max(0, nLearn - 1)));
 
     var learnRounds = intro.map(function (id) { return { id: id, type: 'learn', check: 'intro' }; });
     var findSlots = nLearn - learnRounds.length;
+    // Each learning word that plays gets at least 2 finds; if there isn't
+    // room for all of them, the ones not played for longest go first.
+    var playing = learning.slice();
+    if (findSlots < 2 * playing.length) {
+      var waiting = playing.filter(function (id) { return intro.indexOf(id) === -1; })
+        .sort(function (a, b) { return (peek(state, a).last || 0) - (peek(state, b).last || 0); });
+      playing = intro.filter(function (id) { return playing.indexOf(id) !== -1; }).concat(waiting)
+        .slice(0, Math.max(1, Math.floor(findSlots / 2)));
+    }
     var findRounds = [];
-    while (findRounds.length < findSlots && learning.length) {
-      var batch = shuffle(learning, rng);
+    while (findRounds.length < findSlots && playing.length) {
+      var batch = shuffle(playing, rng);
       for (var i = 0; i < batch.length && findRounds.length < findSlots; i++) {
         findRounds.push({ id: batch[i], type: 'find', check: 'learning' });
       }
@@ -468,6 +501,9 @@
     var plan = [];
     if (maintRounds.length) plan.push(maintRounds.shift());
     plan = plan.concat(spread(learnPart, reviewRounds.concat(maintRounds)));
+    // No word more than 4 times a session: a short session beats "Where's the ball?" ten times.
+    var perWord = {};
+    plan = plan.filter(function (r) { perWord[r.id] = (perWord[r.id] || 0) + 1; return perWord[r.id] <= 4; });
     plan = noBackToBack(plan.slice(0, N));
     return { plan: plan, newWords: newWords };
   }
@@ -490,7 +526,7 @@
     var alike = opts.soundAlike || function () { return false; };
     var ok = function (w) {
       return w.id !== target.id && w.cat !== target.cat && !(w.look && w.look === target.look) &&
-        !alike(w.id, target.id) && hasStyle(w.id);
+        !alike(w.id, target.id) && hasStyle(w.id) && !isPaused(state, w.id);
     };
     var pool = words.filter(ok);
     var st = function (w) { return stateOf(state, w.id); };
@@ -523,25 +559,32 @@
 
   /*
    * Which picture of the target to show.
-   *   exemplars: [{ key, tier: 'narrow'|'wide', style }]
-   * Learning uses the similar ("narrow") pictures, including grown-up photos.
-   * Review and mastery checks use a picture the child hasn't been tested
-   * with, preferring the different-looking ("wide") ones.
+   *   exemplars: [{ key, tier: 'narrow'|'held'|'wide', style }]
+   * Learning uses the similar ("narrow") pictures, including grown-up photos,
+   * never the same one twice running. The first review check prefers a
+   * different-looking ("wide") picture the child hasn't been tested with, the
+   * second the similar one held back for it; mastery checks take any unseen
+   * picture first.
    */
   function chooseExemplar(st, exemplars, check, rng) {
     rng = rng || Math.random;
     if (!exemplars.length) return null;
     var pickFrom = function (list) { return list[Math.floor(rng() * list.length)]; };
+    var unseen = exemplars.filter(function (e) { return st.exSeen.indexOf(e.key) === -1; });
+    var tier = function (list, t) { return list.filter(function (e) { return e.tier === t; }); };
     if (check === 'review' || check === 'maint') {
-      var unseen = exemplars.filter(function (e) { return st.exSeen.indexOf(e.key) === -1; });
-      var wideUnseen = unseen.filter(function (e) { return e.tier === 'wide'; });
-      if (wideUnseen.length) return pickFrom(wideUnseen);
+      var first = check === 'review' && st.reviewStep === 0 ? 'wide' : 'held';
+      var second = first === 'wide' ? 'held' : 'wide';
+      if (tier(unseen, first).length) return pickFrom(tier(unseen, first));
+      if (tier(unseen, second).length) return pickFrom(tier(unseen, second));
       if (unseen.length) return pickFrom(unseen);
       var notLast = exemplars.filter(function (e) { return e.key !== st.lastEx; });
       return pickFrom(notLast.length ? notLast : exemplars);
     }
-    var narrow = exemplars.filter(function (e) { return e.tier !== 'wide'; });
-    return pickFrom(narrow.length ? narrow : exemplars);
+    var narrow = tier(exemplars, 'narrow');
+    if (!narrow.length) narrow = exemplars.filter(function (e) { return e.tier !== 'wide'; });
+    var fresh = narrow.filter(function (e) { return e.key !== st.lastEx; });
+    return pickFrom(fresh.length ? fresh : (narrow.length ? narrow : exemplars));
   }
 
   function awardSticker(state, stickers, rng) {
@@ -555,8 +598,9 @@
 
   function daysPracticed(state, now, span) {
     var n = 0;
+    var today = dayKey(now);
     for (var i = 0; i < (span || 7); i++) {
-      var log = state.days[dayKey(now - i * DAY_MS)];
+      var log = state.days[addDays(today, -i)];
       if (log && (log.sessions || log.trials)) n += 1;
     }
     return n;
