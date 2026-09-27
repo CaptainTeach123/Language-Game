@@ -39,6 +39,9 @@ const STUBS = () => {
   window.__tts = 0;
   if (window.speechSynthesis) window.speechSynthesis.speak = () => { window.__tts += 1; };
   window.print = () => {};
+  // The report opens in its own tab and prints from there: stub that print too.
+  const open = window.open;
+  window.open = function () { const w = open.apply(window, arguments); if (w) w.print = () => {}; return w; };
 };
 
 async function run() {

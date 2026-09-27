@@ -35,14 +35,17 @@
 (function (root) {
   'use strict';
 
+  // `icon` names the word whose first photo stands for the category in the
+  // chips and charts: one that still reads at 32 px (a bed, not the moon's dark
+  // disc; feet, not a nose close-up).
   var CATEGORIES = [
     { id: 'people', name: 'People', color: '#FF5C8A', icon: 'mommy' },
     { id: 'animals', name: 'Animals', color: '#20B26B', icon: 'dog' },
     { id: 'food', name: 'Food', color: '#F04438', icon: 'apple' },
     { id: 'toys', name: 'Toys', color: '#2F7BFF', icon: 'ball' },
     { id: 'clothes', name: 'Clothes', color: '#00A6C8', icon: 'shoes' },
-    { id: 'home', name: 'Home & Sky', color: '#5B5BD6', icon: 'moon' },
-    { id: 'body', name: 'Body', color: '#E4A11B', icon: 'nose' },
+    { id: 'home', name: 'Home & Sky', color: '#5B5BD6', icon: 'bed' },
+    { id: 'body', name: 'Body', color: '#E4A11B', icon: 'feet' },
     { id: 'everyday', name: 'Everyday', color: '#9B5DE5', icon: 'bye-bye', everyday: true }
   ];
 
@@ -63,9 +66,9 @@
     { id: 'fish', word: 'fish', cat: 'animals', kind: 'noun', anim: 'swim', phrase: 'The {w} goes swim, swim!' },
 
     // Food and drink
-    { id: 'milk', word: 'milk', cat: 'food', kind: 'noun', anim: 'bounce', phrase: 'Drink your {w}.' },
-    { id: 'water', word: 'water', cat: 'food', kind: 'noun', anim: 'drip', phrase: 'A cup of {w}.' },
-    { id: 'juice', word: 'juice', cat: 'food', kind: 'noun', anim: 'squeeze', phrase: 'Yummy {w}!' },
+    { id: 'milk', word: 'milk', cat: 'food', kind: 'noun', anim: 'bounce', phrase: 'Drink your {w}.', life: 'Hold up the milk before you pour it and say "milk!" Say it again as your child drinks.' },
+    { id: 'water', word: 'water', cat: 'food', kind: 'noun', anim: 'drip', phrase: 'A cup of {w}.', life: 'Say "water" as you pour it, and again as your child drinks: "Water!"' },
+    { id: 'juice', word: 'juice', cat: 'food', kind: 'noun', anim: 'squeeze', phrase: 'Yummy {w}!', life: 'Show the juice before you pour it and say "juice!" Let your child hold the cup.' },
     { id: 'cookie', word: 'cookie', cat: 'food', kind: 'noun', anim: 'chomp', phrase: 'Yum, a {w}!' },
     { id: 'apple', word: 'apple', cat: 'food', kind: 'noun', anim: 'bounce', phrase: 'Crunch, crunch, {w}!' },
     { id: 'banana', word: 'banana', cat: 'food', kind: 'noun', anim: 'rock', phrase: 'Peel the {w}.' },
@@ -84,10 +87,10 @@
     { id: 'socks', word: 'socks', cat: 'clothes', kind: 'plural', anim: 'wiggle', phrase: '{W} on your feet!' },
 
     // Home and sky
-    { id: 'bath', word: 'bath', cat: 'home', kind: 'noun', anim: 'wobble', phrase: 'Splash, splash, {w} time!' },
-    { id: 'bed', word: 'bed', cat: 'home', kind: 'noun', anim: 'breathe', phrase: 'Time for {w}.' },
-    { id: 'sun', word: 'sun', cat: 'home', kind: 'noun', anim: 'spin', phrase: 'Hello, {w}!' },
-    { id: 'moon', word: 'moon', cat: 'home', kind: 'noun', anim: 'rock', phrase: 'Goodnight, {w}.' },
+    { id: 'bath', word: 'bath', cat: 'home', kind: 'noun', anim: 'wobble', phrase: 'Splash, splash, {w} time!', life: 'At bath time, pat the water and say "bath!" before your child gets in.' },
+    { id: 'bed', word: 'bed', cat: 'home', kind: 'noun', anim: 'breathe', phrase: 'Time for {w}.', life: 'Pat the bed at bedtime and say "bed!" Then "night-night, bed."' },
+    { id: 'sun', word: 'sun', cat: 'home', kind: 'noun', anim: 'spin', phrase: 'Hello, {w}!', life: 'On a sunny day, point up and say "sun!" Do it again at a sunny window.' },
+    { id: 'moon', word: 'moon', cat: 'home', kind: 'noun', anim: 'rock', phrase: 'Goodnight, {w}.', life: 'At bedtime, look out of the window for the moon and say "moon!"' },
 
     // Body (learned a little later)
     { id: 'nose', word: 'nose', cat: 'body', look: 'face', kind: 'noun', anim: 'boop', phrase: 'Beep! Touch your {w}.' },

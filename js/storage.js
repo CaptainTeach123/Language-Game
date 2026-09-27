@@ -46,32 +46,57 @@
   }
 
   var dbPromise = null;
+  // Drop a cached connection so the next call opens a fresh one. The browser
+  // can close it behind our back (Safari does once the app has sat in the
+  // background or under memory pressure), and a newer version of the database
+  // opened elsewhere asks us to let go.
+  function forget(p) {
+    if (dbPromise === p) dbPromise = null;
+  }
   function db() {
     if (dbPromise) return dbPromise;
-    dbPromise = new Promise(function (resolve, reject) {
+    var p = new Promise(function (resolve, reject) {
       if (!root.indexedDB) { reject(new Error('no indexedDB')); return; }
       var req = root.indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
-      req.onsuccess = function () { resolve(req.result); };
+      req.onsuccess = function () {
+        var d = req.result;
+        d.onclose = function () { forget(p); };
+        d.onversionchange = function () { forget(p); d.close(); };
+        resolve(d);
+      };
       req.onerror = function () { reject(req.error); };
     });
-    dbPromise.catch(function () { dbPromise = null; });
-    return dbPromise;
+    dbPromise = p;
+    p.catch(function () { forget(p); });
+    return p;
   }
 
   function tx(mode, fn) {
-    return db().then(function (d) {
-      return new Promise(function (resolve, reject) {
-        var t = d.transaction(STORE, mode);
-        var result;
-        t.oncomplete = function () { resolve(result); };
-        t.onerror = function () { reject(t.error); };
-        t.onabort = function () { reject(t.error); };
-        var store = t.objectStore(STORE);
-        var req = fn(store);
-        if (req) req.onsuccess = function () { result = req.result; };
+    var attempt = function (retry) {
+      var p = db();
+      return p.then(function (d) {
+        return new Promise(function (resolve, reject) {
+          var t;
+          try {
+            t = d.transaction(STORE, mode);
+          } catch (e) {
+            // The connection was closed under us (no close event is sent for that): reopen and try once more.
+            if (retry && e && e.name === 'InvalidStateError') { forget(p); resolve(attempt(false)); return; }
+            reject(e);
+            return;
+          }
+          var result;
+          t.oncomplete = function () { resolve(result); };
+          t.onerror = function () { reject(t.error); };
+          t.onabort = function () { reject(t.error); };
+          var store = t.objectStore(STORE);
+          var req = fn(store);
+          if (req) req.onsuccess = function () { result = req.result; };
+        });
       });
-    });
+    };
+    return attempt(true);
   }
 
   var urlCache = {};

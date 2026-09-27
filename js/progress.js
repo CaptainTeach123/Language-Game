@@ -103,12 +103,14 @@
       lastEx: '',
       last: 0,           // last time the word was named or tested
       lastTrial: 0,      // last find-the-picture trial
+      sessions: 0,       // sessions in which the word was tested
+      lastSession: 0,    // id of the last of those
       known: false       // a grown-up says the child already understands it
     };
   }
 
   var STAT_KEYS = Object.keys(newStat());
-  var NUM_KEYS = ['level', 'seen', 'trials', 'correct', 'errors', 'prompted', 'corrections', 'run', 'missRun', 'reviewStep', 'last', 'lastTrial'];
+  var NUM_KEYS = ['level', 'seen', 'trials', 'correct', 'errors', 'prompted', 'corrections', 'run', 'missRun', 'reviewStep', 'last', 'lastTrial', 'sessions', 'lastSession'];
 
   function recentAcc(recent) {
     if (!recent || !recent.length) return 0;
@@ -121,6 +123,12 @@
     var st = newStat();
     if (typeof raw.state === 'string') {
       STAT_KEYS.forEach(function (k) { if (k in raw) st[k] = raw[k]; });
+      // Saves from before sessions were counted: count the ones the history remembers.
+      if (!('sessions' in raw) && Array.isArray(raw.hist)) {
+        var seenSessions = [];
+        raw.hist.forEach(function (x) { if (x && seenSessions.indexOf(x.s) === -1) seenSessions.push(x.s); });
+        st.sessions = seenSessions.length;
+      }
     } else {
       // Version 1-2 kept star counters instead of stages.
       st.seen = raw.seen | 0;
@@ -285,6 +293,7 @@
     if (outcome === 'prompted') st.prompted += 1;
     st.last = now;
     st.lastTrial = now;
+    if (info.session && info.session !== st.lastSession) { st.sessions += 1; st.lastSession = info.session; }
     if (info.exemplar) {
       st.lastEx = info.exemplar;
       if (st.exSeen.indexOf(info.exemplar) === -1) st.exSeen.push(info.exemplar);
@@ -624,7 +633,7 @@
   function stageLabel(st) {
     if (st.known) return 'already understood';
     if (st.state === 'learning') return 'learning (' + fieldSize(st.level) + ' pictures)';
-    return st.state;
+    return st.state === 'new' ? 'not started' : st.state;
   }
 
   function csvCell(v) {
@@ -634,30 +643,63 @@
 
   function pct(a, b) { return b ? Math.round(a / b * 100) + '%' : ''; }
 
+  // How the word went lately, in plain words: a learning word's last two
+  // sessions ("4 of 5 right", the window the level rules look at); for a
+  // word in review or mastered, its current streak.
+  function recentText(st) {
+    if (st.state === 'learning') {
+      var last2 = st.hist.filter(function (x) { return x.n > 0; }).slice(-2);
+      var n = 0;
+      var ok = 0;
+      last2.forEach(function (x) { n += x.n; ok += x.ok; });
+      if (n) return ok + ' of ' + n + ' right';
+    }
+    if (st.run) return st.run === 1 ? 'right the last time' : st.run + ' right in a row';
+    if (st.missRun) return st.missRun === 1 ? 'missed the last one' : 'missed the last ' + st.missRun;
+    return '';
+  }
+
   // One row per word for a speech-language pathologist.
   function reportRows(state, words, catById, extra) {
     var rows = [['Word', 'Category', 'Stage', 'Pictures shown', 'Trials', 'Correct (no hint)', '% correct (no hint)',
-      'Needed a hint', 'Wrong first tap', 'Right on do-over', 'Pictures available', 'Pictures tested',
-      'First introduced', 'Mastered on', 'Last practiced', 'Notes']];
+      'Needed a hint', 'Wrong first tap', 'Right on do-over', 'Sessions', 'Lately', 'Pictures available', 'Pictures tested',
+      'First introduced', 'Mastered on', 'Last tested', 'Next check', 'Notes']];
     words.forEach(function (w) {
       var st = peek(state, w.id);
       var x = extra ? extra(w) : {};
       rows.push([
         x.label || w.word,
         catById[w.cat] ? catById[w.cat].name : w.cat,
-        stageLabel(st),
+        stageLabel(st) + (isPaused(state, w.id) ? ' (paused)' : ''),
         st.state === 'learning' ? fieldSize(st.level) : (st.state === 'new' ? '' : 4),
         st.trials, st.correct, pct(st.correct, st.trials), st.prompted, st.errors, st.corrections,
+        st.sessions, recentText(st),
         x.exemplars != null ? x.exemplars : '', st.exSeen.length,
-        st.introduced, st.masteredOn, st.last ? dayKey(st.last) : '',
+        st.introduced, st.masteredOn, st.lastTrial ? dayKey(st.lastTrial) : '', st.due,
         x.notes || ''
       ]);
     });
     return rows;
   }
 
+  // One row per day played: rounds, how many were right with no hint, minutes.
+  function dayRows(state) {
+    var rows = [['Day', 'Rounds', 'Right (no hint)', 'Minutes']];
+    Object.keys(state.days).sort().forEach(function (k) {
+      var d = state.days[k];
+      if (!d || (!d.trials && !d.sessions)) return;
+      rows.push([k, d.trials, d.correct, d.seconds ? Math.max(1, Math.round(d.seconds / 60)) : 0]);
+    });
+    return rows;
+  }
+
+  function csvTable(rows) {
+    return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\n') + '\n';
+  }
+
+  // The word table, a blank line, then the day-by-day table.
   function reportCSV(state, words, catById, extra) {
-    return reportRows(state, words, catById, extra).map(function (r) { return r.map(csvCell).join(','); }).join('\n') + '\n';
+    return csvTable(reportRows(state, words, catById, extra)) + '\n' + csvTable(dayRows(state));
   }
 
   var api = {
@@ -692,7 +734,9 @@
     daysPracticed: daysPracticed,
     summary: summary,
     stageLabel: stageLabel,
+    recentText: recentText,
     reportRows: reportRows,
+    dayRows: dayRows,
     reportCSV: reportCSV,
     shuffle: shuffle
   };

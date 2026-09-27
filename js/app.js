@@ -136,7 +136,11 @@
   // (Anthony's Mommy, not a stranger).
   function exemplarsFor(w) {
     var own = photoKeys(w).map(function (k) { return { key: k, photo: k, style: 'photo', tier: 'narrow' }; });
-    if (own.length && w.look === 'person') return own;
+    if (own.length && w.look === 'person') {
+      // The last photo of a person (other clothes, another place) is kept for the review check.
+      if (own.length >= 2) own[own.length - 1].tier = 'wide';
+      return own;
+    }
     return own.concat(D.photos(w));
   }
 
@@ -506,7 +510,7 @@
       });
       grid.appendChild(tile);
     });
-    var start = h('button', { class: 'btn green', style: 'width:100%' }, 'Start');
+    var start = h('button', { class: 'btn green pick-start', style: 'width:100%' }, 'Start');
     start.addEventListener('click', function () {
       A.unlock();
       audioReady = true;
@@ -638,7 +642,7 @@
           h('li', { html: '<b>Sit beside ' + CHILD + '</b>, with the phone between you.' }),
           h('li', { html: 'After the wizard asks, <b>say it too</b>: "Where\'s the ball?" Then <b>wait</b>.' }),
           h('li', { html: '<b>Let ' + CHILD + ' tap.</b> Try not to point; if he needs help, the game shows the answer.' }),
-          h('li', { html: '<b>Cheer when they find it</b> and say the word again: "Ball!"' })),
+          h('li', { html: '<b>Cheer when he finds it</b> and say the word again: "Ball!"' })),
         h('h3', { text: 'Today\'s words' }),
         chips,
         tips.length ? h('div', { class: 'install-tip' }, h('b', { text: 'Tip: ' }), tips[0], ' ', h('button', {
@@ -1228,8 +1232,10 @@
       var next = h('button', { class: 'arrow-btn', 'aria-label': 'Next', html: arrowSvg('right', '#26264A') });
       prev.addEventListener('click', function () { Sfx.whoosh(); i = (i - 1 + list.length) % list.length; show(); });
       next.addEventListener('click', function () { Sfx.whoosh(); i = (i + 1) % list.length; show(); });
-      var note = w.kind === 'name' || w.cat === 'body' ? realLife(w)
-        : 'Hold up a real ' + label(w) + ' next to the picture. Say "' + label(w) + '!" and let ' + CHILD + ' touch the real one.';
+      var note;
+      if (w.life || w.kind === 'name' || w.cat === 'body') note = realLife(w);
+      else if (w.kind === 'plural') note = 'Hold up real ' + label(w) + ' next to the picture. Say "' + label(w) + '!" and let ' + CHILD + ' touch them.';
+      else note = 'Hold up a real ' + label(w) + ' next to the picture. Say "' + label(w) + '!" and let ' + CHILD + ' touch the real one.';
       body.appendChild(h('div', { class: 'real-note' }, h('b', { text: 'Grown-ups: ' }), note));
       body.appendChild(h('div', { class: 'stage-main' }, h('div', { class: 'viewer-row' }, prev, card, next)));
       P.recordExposure(state, w.id, Date.now());
@@ -1269,12 +1275,25 @@
 
     function renderGrid() {
       grid.innerHTML = '';
-      var list = D.WORDS.filter(function (w) { return wordsCat === 'all' || w.cat === wordsCat; });
+      var shown = D.WORDS.filter(function (w) { return wordsCat === 'all' || w.cat === wordsCat; });
+      // Anthony's own word joins the book once there's a photo of him (the same rule as the game);
+      // until then its tile asks for one.
+      var list = shown.filter(function (w) { return w.everyday || available(w.id); });
       list.forEach(function (w, idx) {
         var cat = D.catById[w.cat];
         var tile = h('button', { class: 'tile', style: '--cc:' + cat.color + ';--i:' + Math.min(idx, 14), 'aria-label': label(w) },
           picture(w), h('div', { class: 'name', text: label(w) }));
         tile.addEventListener('click', function () { Sfx.pop(); openViewer(list, idx); });
+        grid.appendChild(tile);
+      });
+      shown.filter(function (w) { return !w.everyday && !available(w.id); }).forEach(function (w) {
+        var cat = D.catById[w.cat];
+        var tile = h('button', { class: 'tile add-photo', style: '--cc:' + cat.color + ';--i:' + Math.min(list.length, 14), 'aria-label': 'Add a photo of ' + label(w) },
+          h('div', { class: 'pic' }, h('img', { src: 'img/ui/me.webp', alt: '' })), h('div', { class: 'name', text: 'Add a photo' }));
+        tile.addEventListener('click', function () {
+          Sfx.tap();
+          toast('Grown-ups: press and hold the gear on the home screen, then open Words, to add a photo of ' + label(w) + '.', 3500);
+        });
         grid.appendChild(tile);
       });
     }
@@ -1431,7 +1450,8 @@
 
   var STAGE_COLORS = { new: '#8A94A6', learning: '#2F7BFF', review: '#FF8A00', mastered: '#22C55E' };
   function stageChip(st) {
-    var text = st.known ? 'Already knows' : (st.state === 'learning' ? 'Learning · ' + P.fieldSize(st.level) + ' pictures' : cap(st.state));
+    var text = st.known ? 'Already knows'
+      : (st.state === 'learning' ? 'Learning · ' + P.fieldSize(st.level) + ' pictures' : (st.state === 'new' ? 'Not started' : cap(st.state)));
     return h('span', { class: 'stage-chip', style: '--sc:' + STAGE_COLORS[st.state], text: text });
   }
 
@@ -1439,29 +1459,71 @@
     return { label: label(w), exemplars: exemplarsFor(w).length, notes: customOf(w.id).notes || '' };
   }
 
-  function printReport() {
-    var rows = P.reportRows(state, PICTURE_WORDS.filter(function (w) { return available(w.id); }), D.catById, reportExtra);
-    var table = h('table');
-    rows.forEach(function (r, i) {
-      var tr = h('tr');
-      r.forEach(function (c) { tr.appendChild(h(i ? 'td' : 'th', { text: String(c) })); });
-      table.appendChild(tr);
+  // The words the game can play right now (Anthony's own word needs a photo first).
+  function reportWords() {
+    return PICTURE_WORDS.filter(function (w) { return available(w.id); });
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
-    var sum = P.summary(state, PICTURE_WORDS);
-    var div = h('div', { id: 'print-report' },
-      h('h1', { text: 'Word Wizard progress report' }),
-      h('p', { text: CHILD + ' · ' + new Date().toLocaleDateString() +
-        ' · Mastered ' + sum.mastered + ', review ' + sum.review + ', learning ' + sum.learning + ' of ' + sum.total + ' picture words' }),
-      h('p', { text: '"Correct (no hint)" counts only the child\'s first tap with no help. Pictures shown = how many pictures the child chooses from (2-4).' }),
-      table);
-    document.body.appendChild(div);
-    var cleanup = function () { if (div.parentNode) div.remove(); window.removeEventListener('afterprint', cleanup); };
-    window.addEventListener('afterprint', cleanup);
-    setTimeout(function () { window.print(); }, 50);
+  }
+
+  function htmlTable(rows, cls) {
+    return '<table' + (cls ? ' class="' + cls + '"' : '') + '>' + rows.map(function (r, i) {
+      var tag = i ? 'td' : 'th';
+      return '<tr>' + r.map(function (c) { return '<' + tag + '>' + escapeHtml(c) + '</' + tag + '>'; }).join('') + '</tr>';
+    }).join('') + '</table>';
+  }
+
+  // The report as one self-contained web page (no pictures, no outside files),
+  // so it can be sent to the therapist, printed or saved as a PDF anywhere.
+  function reportHTML() {
+    var words = reportWords();
+    var sum = P.summary(state, words);
+    var days = P.dayRows(state);
+    var css = 'body{font:13px/1.45 -apple-system,"Helvetica Neue",Helvetica,Arial,sans-serif;color:#222;background:#fff;margin:20px;max-width:1120px}' +
+      'h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 6px}p{margin:4px 0}ul{margin:4px 0;padding-left:20px}li{margin:3px 0}' +
+      'table{border-collapse:collapse;width:100%;font-size:11px;margin-top:6px}th,td{border:1px solid #999;padding:3px 5px;text-align:left;vertical-align:top}' +
+      'th{background:#EEE}table.days{width:auto;min-width:320px}.muted{color:#666}' +
+      'button{font-family:inherit;font-size:15px;padding:10px 18px;border-radius:12px;border:0;background:#9B5DE5;color:#fff;margin:10px 0}' +
+      '@media print{button{display:none}}@page{size:landscape;margin:12mm}';
+    var head = CHILD + ' · ' + new Date().toLocaleDateString() + ' · ' + sum.mastered + ' mastered, ' + sum.review + ' in review, ' +
+      sum.learning + ' learning, ' + sum.new + ' not started, of ' + sum.total + ' picture words.';
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>Word Wizard report for ' + escapeHtml(CHILD) + '</title><style>' + css + '</style></head><body>' +
+      '<h1>Word Wizard progress report</h1><p>' + escapeHtml(head) + '</p>' +
+      '<button onclick="window.print()">Print or save as PDF</button>' +
+      '<h2>Words</h2>' + htmlTable(P.reportRows(state, words, D.catById, reportExtra)) +
+      '<h2>Day by day</h2>' + (days.length > 1 ? htmlTable(days, 'days') : '<p class="muted">No sessions played yet.</p>') +
+      '<h2>Notes for the speech therapist</h2><ul>' +
+      '<li>Word Wizard is a listening game: a recorded voice says "Where\'s the ball?" and ' + escapeHtml(CHILD) + ' taps the matching real photo among 2, 3 or 4. Nothing asks him to talk.</li>' +
+      '<li>"Correct (no hint)" counts only the child\'s first tap with no help. If he waited, the right picture glowed ("Needed a hint"). A wrong first tap gets a calm correction and a do-over with the pictures moved; "Right on do-over" is counted separately and never as correct.</li>' +
+      '<li>"Pictures shown" is how many pictures he chooses from. A word moves from 2 to 3 pictures once it is found twice in a row, to 4 at about 80% correct across 2 sessions, and drops back after 2 sessions under 50%. At 4 pictures, other words still being learned are among the choices.</li>' +
+      '<li>Stages: learning, then review (about 80% among 4 pictures on 2 different days), then mastered (found again 2 and 7 days later, each time with a photo he had not been tested with). Mastered words are checked again after 14, 30 and 60 days, and a word missed twice in a row goes back to learning. "Already understood" means a grown-up marked the word as known.</li>' +
+      '<li>"Sessions" is how many sessions the word was tested in. "Lately" is the word\'s last two sessions while learning, or its current streak in review. "Next check" is the day its next review or maintenance check is due. A paused word was set aside by the grown-up.</li>' +
+      '<li>Wrong choices always come from other categories and are never words that sound alike (cat, hat) or look alike. Sessions are 10 to 20 pictures, stop after 5 or 10 minutes, and are played with a grown-up beside him.</li>' +
+      '</ul><p class="muted">Everything stays on the phone: no accounts, no tracking.</p></body></html>';
+  }
+
+  // From the Home Screen app, printing does nothing on iPhone, so the report is
+  // shared as a page (AirDrop, Mail, Files). In a browser it opens and prints.
+  function shareReport() {
+    var html = reportHTML();
+    var name = 'word-wizard-report-' + P.dayKey(Date.now()) + '.html';
+    if (isStandalone() || typeof window.print !== 'function') { shareFile(name, html, 'text/html'); return; }
+    var win = null;
+    try { win = window.open('', '_blank'); } catch (e) { win = null; }
+    if (!win) { shareFile(name, html, 'text/html'); return; }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    setTimeout(function () { try { win.focus(); win.print(); } catch (e) { /* the page has its own Print button */ } }, 500);
   }
 
   function progressTab(body) {
-    var sum = P.summary(state, PICTURE_WORDS);
+    var sum = P.summary(state, reportWords());
     var now = Date.now();
     var tip = installTip();
     if (tip) body.appendChild(pCard(null, tip));
@@ -1479,11 +1541,12 @@
     PICTURE_WORDS.forEach(function (w) {
       var st = P.peek(state, w.id);
       if (st.state !== 'learning' && st.state !== 'review') return;
+      var badge = P.isPaused(state, w.id) ? 'paused' : (st.state === 'review' ? 'review' : P.fieldSize(st.level) + ' pictures');
       chips.appendChild(h('div', { class: 'focus-chip' }, h('div', { class: 'chip-pic' }, picture(w)), label(w),
-        h('span', { class: 'badge-level', text: st.state === 'review' ? 'review' : P.fieldSize(st.level) + ' pics' })));
+        h('span', { class: 'badge-level', text: badge })));
     });
     body.appendChild(pCard('Learning now', chips.children.length ? chips : h('p', { class: 'p-muted', text: 'Words join when you press Play.' }),
-      h('p', { class: 'p-muted', text: 'New words join 1 or 2 at a time, only while ' + state.settings.learningCap + ' or fewer are being learned.' }),
+      h('p', { class: 'p-muted', text: 'New words join 1 or 2 at a time, whenever fewer than ' + state.settings.learningCap + ' are being learned.' }),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn purple small', onclick: function () { parentTab = 'words'; wordFilter = 'learning'; go('parent'); } }, 'Choose words'))));
 
     // This week
@@ -1506,11 +1569,13 @@
     });
     var today = state.days[P.dayKey(now)];
     var todayText = today && today.trials
-      ? 'Today: about ' + Math.max(1, Math.round(today.seconds / 60)) + ' min, ' + today.trials + ' pictures, ' +
+      ? 'Today: about ' + Math.max(1, Math.round(today.seconds / 60)) + ' minutes, ' + today.trials + ' pictures, ' +
         Math.round(today.correct / today.trials * 100) + '% found with no hint.'
       : 'Not played yet today.';
+    var practiced = P.daysPracticed(state, now, 7);
+    var weekText = practiced ? 'Practiced ' + practiced + (practiced === 1 ? ' day' : ' days') + ' this week. ' : 'Not practiced yet this week. ';
     body.appendChild(pCard('This week',
-      h('p', { text: 'Played on ' + P.daysPracticed(state, now, 7) + ' of the last 7 days. ' + todayText }),
+      h('p', { text: weekText + todayText }),
       week,
       h('p', { class: 'p-muted', text: 'Pictures to find each day. Spreading short sessions across days helps words stick better than one long session.' }),
       h('p', { class: 'p-muted', text: 'Screen time: health guidance for 2-year-olds is no more than 1 hour a day (less is better), used together. Each session stops after ' + state.settings.maxMinutes + ' minutes.' })));
@@ -1527,25 +1592,28 @@
     body.appendChild(cats);
 
     body.appendChild(pCard('Report for your speech therapist',
-      h('p', { text: 'Every word with trials, % found with no hint vs. with a hint, pictures shown, how many different pictures were used, dates introduced and mastered, and your notes.' }),
+      h('p', { text: 'Every word: its stage, pictures shown, how often it was found with no hint, with a hint or on the do-over, sessions played, how it went lately, the next check, dates and your notes. Plus a day-by-day table.' }),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn blue small', onclick: function () {
-          shareFile('word-wizard-report-' + P.dayKey(Date.now()) + '.csv',
-            P.reportCSV(state, PICTURE_WORDS.filter(function (w) { return available(w.id); }), D.catById, reportExtra), 'text/csv');
+          shareFile('word-wizard-report-' + P.dayKey(Date.now()) + '.csv', P.reportCSV(state, reportWords(), D.catById, reportExtra), 'text/csv');
         } }, 'Share spreadsheet'),
-        h('button', { class: 'btn white small', onclick: printReport }, 'Print or save PDF'))));
+        h('button', { class: 'btn white small', onclick: shareReport }, isStandalone() ? 'Share report' : 'Print or save PDF')),
+      h('p', { class: 'p-muted', text: isStandalone()
+        ? 'The report is a web page: AirDrop or email it to your therapist, or save it to Files and print it from Safari.'
+        : 'The report opens as a page you can print or save as a PDF.' })));
   }
 
   function wordStatsText(w) {
     var st = P.peek(state, w.id);
     if (w.personal && !hasPhoto(w)) return 'Add a photo of ' + CHILD + ' to use this word';
     var bits = [];
-    if (st.trials) bits.push('No hint ' + st.correct + '/' + st.trials + ' (' + Math.round(st.correct / st.trials * 100) + '%)');
-    if (st.prompted) bits.push('hint ' + st.prompted);
+    if (st.trials) bits.push('Found ' + st.correct + ' of ' + st.trials + ' with no hint (' + Math.round(st.correct / st.trials * 100) + '%)');
+    if (st.prompted) bits.push('needed a hint ' + (st.prompted === 1 ? 'once' : st.prompted + ' times'));
     var photos = photoKeys(w).length;
     if (photos) bits.push(photos + (photos === 1 ? ' photo' : ' photos'));
     if (P.isPaused(state, w.id)) bits.push('paused');
-    return bits.join(' · ') || 'Not started';
+    if (bits.length) return bits.join(' · ');
+    return st.state === 'new' ? 'Joins by itself when there\'s room, or tap Start' : 'Not tested yet';
   }
 
   function wordsTab(body) {
@@ -1678,7 +1746,9 @@
       if (photoKeys(w).length < MAX_PHOTOS) {
         photoGrid.appendChild(h('button', { class: 'photo-add', onclick: function () { fileInput.click(); } }, '+ Add photo'));
       }
-      photoStatus.textContent = 'Use 2 or 3 photos of the real thing (' + CHILD + '\'s own ball, his cup, Grandma) on a plain background.';
+      photoStatus.textContent = w.look === 'person'
+        ? 'One clear face on a plain background, 2 to 4 photos. Make the last one look different (other clothes or another place): it\'s used to check the word has really stuck.'
+        : 'Use 2 or 3 photos of the real thing (' + CHILD + '\'s own ball, his cup) on a plain background.';
     }
     fileInput.addEventListener('change', function () {
       var f = fileInput.files && fileInput.files[0];
@@ -1763,14 +1833,20 @@
   function settingsTab(body) {
     var st = state.settings;
 
+    var stopLabel = h('span', { text: 'Stop after ' + st.maxMinutes + ' minutes' });
     body.appendChild(pCard('Game',
-      setting('Words learning at once', 'New words only join while this many or fewer are being learned. 4 to 6 is recommended.',
+      setting('Words learning at once', 'Up to this many words are learned at a time; a new one joins only when there\'s room. 4 to 6 works well.',
         segmented([[4, '4'], [5, '5'], [6, '6']], st.learningCap, function (v) { st.learningCap = v; save(); })),
       setting('Pictures per session', 'About 10 to 20 is plenty for a 2-year-old.',
         segmented([[10, '10'], [15, '15'], [20, '20']], st.sessionTrials, function (v) { st.sessionTrials = v; save(); })),
-      setting('Stop after', 'A session always ends at this time limit.',
-        segmented([[5, '5 min'], [10, '10 min']], st.maxMinutes, function (v) { st.maxMinutes = v; save(); })),
-      setting('Sound effects', null, toggle(st.sfx, function (on) { st.sfx = on; Sfx.enabled = on; save(); })),
+      setting(stopLabel, 'The session ends by itself after this many minutes, always on a success.',
+        segmented([[5, '5 min'], [10, '10 min']], st.maxMinutes, function (v) {
+          st.maxMinutes = v;
+          stopLabel.textContent = 'Stop after ' + v + ' minutes';
+          save();
+        })),
+      setting('Sound effects', 'Taps, pops and cheers. The wizard\'s voice stays on either way.',
+        toggle(st.sfx, function (on) { st.sfx = on; Sfx.enabled = on; save(); })),
       h('div', { class: 'btn-row' }, h('button', { class: 'btn blue small', onclick: function () { A.unlock(); Speech.say(['ball-where']); } }, 'Test sound'))
     ));
 
@@ -1781,11 +1857,23 @@
       f.text().then(function (txt) {
         var data = JSON.parse(txt);
         if (!data || !data.words || !data.settings) throw new Error('bad');
-        if (!window.confirm('Replace the progress on this device with this backup?')) return;
-        var keepCustom = state.custom;
+        if (!window.confirm('Replace the progress on this device with this backup? The photos on this phone stay, and notes from both are kept.')) return;
+        var mine = state.custom;
         state = P.normalizeState(data, Date.now());
-        // Photos live on the device, so keep this device's.
-        state.custom = keepCustom;
+        // Photos live on this device (a backup can't hold them); notes come from both.
+        Object.keys(mine).concat(Object.keys(state.custom)).forEach(function (id) {
+          var c = state.custom[id] || (state.custom[id] = {});
+          var m = mine[id] || {};
+          delete c.photo;
+          delete c.photos;
+          if (m.photo) c.photo = m.photo;
+          if (m.photos && m.photos.length) c.photos = m.photos;
+          if (m.notes) {
+            if (!c.notes || m.notes.indexOf(c.notes) !== -1) c.notes = m.notes;
+            else if (c.notes.indexOf(m.notes) === -1) c.notes = c.notes + '\n' + m.notes;
+          }
+          if (!Object.keys(c).length) delete state.custom[id];
+        });
         S.saveState(state, true);
         applySettings();
         toast('Backup restored');
@@ -1801,7 +1889,7 @@
         } }, 'Save backup'),
         h('button', { class: 'btn white small', onclick: function () { importInput.click(); } }, 'Restore backup')),
       importInput,
-      h('p', { class: 'p-muted', text: 'Your photos stay on this device and are not in the backup.' })));
+      h('p', { class: 'p-muted', text: 'The file holds progress, settings and your notes, but not your photos: photos stay on this phone, so add them again on a new one. Restoring keeps the photos and notes already on this phone.' })));
 
     body.appendChild(pCard('Start over',
       h('p', { class: 'p-muted', text: 'Erases progress and stickers. Your settings, notes and photos are kept.' }),
@@ -1947,7 +2035,7 @@
         // Look for a new version each time the app comes back to the front.
         document.addEventListener('visibilitychange', function () {
           if (document.hidden) return;
-          reg.update().catch(function () { /* offline */ });
+          if (reg) reg.update().catch(function () { /* offline */ });
           askPrecache();
         });
       }).catch(function () { /* offline support is optional */ });

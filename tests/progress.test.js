@@ -298,13 +298,42 @@ test('report has a row per word with hint vs no-hint numbers, and quotes commas'
   session(s, 'ball', ['correct', 'prompted', 'error', 'correct'], T0);
   const extra = (w) => ({ label: w.id === 'mommy' ? 'Mama, Mom' : w.word, exemplars: 5, notes: w.id === 'ball' ? 'Said "ba"' : '' });
   const csv = P.reportCSV(s, D.PICTURE_WORDS, D.catById, extra);
-  const lines = csv.trim().split('\n');
+  const tables = csv.trim().split('\n\n');
+  assert.equal(tables.length, 2, 'the word table, then the day table');
+  const lines = tables[0].split('\n');
   assert.equal(lines.length, D.PICTURE_WORDS.length + 1);
   assert.ok(lines[0].startsWith('Word,Category,Stage,Pictures shown,Trials,Correct (no hint)'));
-  assert.ok(lines[1].startsWith('"Mama, Mom",People,new'));
+  assert.ok(lines[1].startsWith('"Mama, Mom",People,not started'));
   const ball = lines.find((l) => l.startsWith('ball,'));
-  assert.ok(ball.startsWith('ball,Toys,learning (2 pictures),2,4,2,50%,1,1,0,5,1,2026-01-05,'), ball);
+  assert.ok(ball.startsWith('ball,Toys,learning (2 pictures),2,4,2,50%,1,1,0,1,2 of 4 right,5,1,2026-01-05,,2026-01-05,,'), ball);
   assert.ok(ball.endsWith(',"Said ""ba"""'));
+  const days = tables[1].split('\n');
+  assert.equal(days[0], 'Day,Rounds,Right (no hint),Minutes');
+  assert.equal(days[1], '2026-01-05,4,2,1');
+});
+
+test('the report tells a paused word, when it was last tested (not just shown) and when its next check is', () => {
+  const s = fresh();
+  P.introduce(s, 'milk', T0);
+  P.recordTrial(s, 'milk', 'error', { session: 1, exemplar: 'milk@1' }, T0);
+  P.pause(s, 'milk');
+  P.recordExposure(s, 'milk', day(3));
+  toReview(s, 'duck', T0);
+  P.recordExposure(s, 'book', day(3));
+  const rows = P.reportRows(s, D.PICTURE_WORDS, D.catById);
+  const col = (name) => rows[0].indexOf(name);
+  const row = (id) => rows.find((r) => r[0] === D.byId[id].word);
+  assert.equal(row('milk')[col('Stage')], 'learning (2 pictures) (paused)');
+  assert.equal(row('milk')[col('Last tested')], P.dayKey(T0), 'browsing the picture book is not a test');
+  assert.equal(row('milk')[col('Lately')], '0 of 1 right');
+  assert.equal(row('book')[col('Last tested')], '');
+  assert.equal(row('duck')[col('Next check')], P.addDays(P.dayKey(day(1)), 2));
+  assert.equal(row('duck')[col('Sessions')], 5);
+  assert.equal(row('duck')[col('Lately')], '4 right in a row');
+  // A save from before sessions were counted gets them from its history.
+  const old = P.normalizeState(JSON.parse(JSON.stringify(s)), T0);
+  delete old.words.duck.sessions;
+  assert.equal(P.normalizeState(JSON.parse(JSON.stringify(old)), T0).words.duck.sessions, 5);
 });
 
 test('saves from earlier versions carry over', () => {

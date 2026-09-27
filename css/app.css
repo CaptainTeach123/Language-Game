@@ -115,7 +115,7 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
 }
 .cloud::before { width: 70px; height: 70px; left: 22px; top: -34px; }
 .cloud::after { width: 52px; height: 52px; left: 78px; top: -22px; }
-.cloud.c1 { top: 12%; left: -20%; animation-duration: 80s; }
+.cloud.c1 { top: 24%; left: -20%; animation-duration: 80s; }
 .cloud.c2 { top: 30%; left: -40%; transform: scale(0.7); animation-duration: 110s; animation-delay: -40s; opacity: 0.8; }
 .cloud.c3 { top: 6%; left: -30%; transform: scale(0.55); animation-duration: 95s; animation-delay: -70s; opacity: 0.75; }
 
@@ -338,6 +338,11 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
 @keyframes letter { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(3deg); } }
 
 .home-mascot { width: min(56vw, 30vh, 250px); height: min(56vw, 30vh, 250px); margin: 2vh 0 1vh; }
+/* Short screens (an iPhone SE, or Safari's bars showing): a smaller title and wizard keep the play button and the castle in view. */
+@media (max-height: 700px) and (orientation: portrait) {
+  .logo { font-size: clamp(32px, 10vw, 42px); }
+  .home-mascot { width: min(52vw, 28vh, 250px); height: min(52vw, 28vh, 250px); margin: 1vh 0 0.5vh; }
+}
 
 .play-btn {
   width: min(40vw, 20vh, 170px);
@@ -389,6 +394,7 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 56px;
   background: #fff;
   border-radius: 999px;
   padding: 6px 14px 6px 8px;
@@ -396,7 +402,7 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
   font-weight: 700;
   box-shadow: 0 4px 0 rgba(38, 38, 74, 0.18);
 }
-.sticker-count img { width: 34px; height: 34px; }
+.sticker-count img { width: 40px; height: 40px; }
 
 /* Hold-to-open grown-up button */
 .hold-btn { position: relative; }
@@ -529,8 +535,9 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
 /* Tall phones: stack two big pictures so they are easy targets for little fingers. */
 @media (orientation: portrait) and (max-aspect-ratio: 3/5) {
   .choices.n2 { flex-direction: column; align-items: center; flex-wrap: nowrap; }
-  .choices.n2 .choice { width: min(58vw, 30vh, 280px); }
-  @supports (height: 1svh) { .choices.n2 .choice { width: min(58vw, 29svh, 280px); } }
+  /* The class is doubled so this beats the side-by-side size further down. */
+  .choices.n2.n2 .choice { width: min(66vw, 33vh, 300px); }
+  @supports (height: 1svh) { .choices.n2.n2 .choice { width: min(66vw, 33svh, 300px); } }
 }
 @media (max-width: 380px) {
   .trail i { width: 11px; height: 11px; border-width: 2px; }
@@ -560,18 +567,16 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
 .choice.dim { opacity: 0.45; }
 .choice.fade { opacity: 0.25; transform: scale(0.9); }
 .choices.reshow { animation: fade-in 0.35s ease-out; }
-.choice.hint { animation: glow 1s ease-in-out infinite; }
+/* The hint is a solid gold ring around the answer (a see-through halo washes out on the sky); it only breathes wider. */
+.choice.hint { animation: glow 1s ease-in-out infinite; box-shadow: 0 7px 0 #C9D2E3, 0 0 0 10px var(--gold); }
 /* No pop-in on the do-over (the row just fades in), and never again once a card is answered. */
 .choices.reshow .choice:not(.hint), .choice.right, .choice.dim, .choice.fade { animation: none; }
-@keyframes glow { 0%, 100% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 0 rgba(255, 201, 40, 0.9); } 50% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 14px rgba(255, 201, 40, 0.55); transform: scale(1.04); } }
+@keyframes glow { 50% { box-shadow: 0 7px 0 #C9D2E3, 0 0 0 16px var(--gold); transform: scale(1.04); } }
 
 
-/* Learn round: after the word is named, the card glows until the child taps it. */
-.big-card.tap-me { animation: tap-glow 1.2s ease-in-out infinite; }
-@keyframes tap-glow {
-  0%, 100% { box-shadow: 0 7px 0 var(--cc), 0 0 0 0 rgba(255, 201, 40, 0.9); transform: scale(1); }
-  50% { box-shadow: 0 7px 0 var(--cc), 0 0 0 16px rgba(255, 201, 40, 0.5); transform: scale(1.03); }
-}
+/* Learn round: after the word is named, the card wears the same gold ring, with a white gap from its coloured frame, until the child taps it. */
+.big-card.tap-me { animation: tap-glow 1.2s ease-in-out infinite; box-shadow: 0 7px 0 var(--cc), 0 0 0 5px #fff, 0 0 0 15px var(--gold); }
+@keyframes tap-glow { 50% { box-shadow: 0 7px 0 var(--cc), 0 0 0 5px #fff, 0 0 0 21px var(--gold); transform: scale(1.03); } }
 
 
 /* ------------------------------------------------------------------ */
@@ -691,16 +696,17 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px 6px 6px;
+  min-height: 64px;
+  padding: 6px 16px 6px 8px;
   border-radius: 999px;
   background: #fff;
   border: 4px solid var(--cc);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 600;
   color: var(--ink);
   box-shadow: 0 4px 0 rgba(38, 38, 74, 0.15);
 }
-.chip img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.chip img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
 .chip.on { background: var(--cc); color: #fff; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; }
@@ -720,13 +726,19 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
 .tile:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--cc); }
 .tile .pic { aspect-ratio: 1 / 1; height: auto; }
 .tile .name { font-size: 19px; font-weight: 600; color: var(--cc); line-height: 1.1; margin-top: 2px; text-align: center; }
+/* A word that needs the family's own photo (Anthony) shows a dashed slot until one is added. */
+.tile.add-photo { border-style: dashed; background: rgba(255, 255, 255, 0.7); box-shadow: none; }
+.tile.add-photo .pic > img { width: 62%; height: 62%; opacity: 0.55; }
+.tile.add-photo .name { font-size: 16px; }
 .mini-stars { display: flex; gap: 2px; margin-top: 3px; }
 .mini-stars svg { width: 15px; height: 15px; }
 
 .sticker { background: rgba(255, 255, 255, 0.85); border-radius: 24px; aspect-ratio: 1 / 1; display: grid; place-items: center; position: relative; box-shadow: 0 5px 0 rgba(38, 38, 74, 0.12); }
 .sticker img { width: 80%; height: 80%; filter: drop-shadow(0 4px 4px rgba(38, 38, 74, 0.2)); }
-.sticker.missing { background: rgba(255, 255, 255, 0.4); box-shadow: none; }
-.sticker.missing img { filter: brightness(0) invert(1); opacity: 0.55; }
+/* A sticker not yet earned is a mystery slot with a soft star, not a faded preview of the picture. */
+.sticker.missing { background: rgba(255, 255, 255, 0.6); box-shadow: none; }
+.sticker.missing img { display: none; }
+.sticker.missing::before { content: ''; width: 44%; aspect-ratio: 1 / 1; background: #fff; opacity: 0.7; clip-path: var(--star); }
 .sticker .count { position: absolute; top: -6px; right: -6px; background: var(--pink); color: #fff; font-size: 16px; font-weight: 700; border-radius: 999px; min-width: 28px; height: 28px; display: grid; place-items: center; border: 3px solid #fff; }
 
 /* Full screen viewer */
@@ -744,9 +756,16 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
 .viewer-row { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
 .viewer-row .big-card { width: min(62vw, 35vh, 360px); }
 @supports (height: 1svh) { .viewer-row .big-card { width: min(62vw, 35svh, 360px); } }
-.arrow-btn { width: 54px; height: 54px; flex: none; border-radius: 50%; background: #fff; box-shadow: 0 5px 0 rgba(38, 38, 74, 0.2); display: grid; place-items: center; }
-.arrow-btn svg { width: 30px; height: 30px; }
+.arrow-btn { width: 72px; height: 72px; flex: none; border-radius: 50%; background: #fff; box-shadow: 0 5px 0 rgba(38, 38, 74, 0.2); display: grid; place-items: center; }
+.arrow-btn svg { width: 34px; height: 34px; }
 .arrow-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(38, 38, 74, 0.2); }
+/* On a phone the arrows sit under the picture's corners, so the card stays big and a reach for it can't flip the page. */
+@media (max-width: 480px) and (orientation: portrait) {
+  .viewer-row { display: grid; grid-template-columns: auto auto; justify-content: center; justify-items: center; gap: 12px 96px; }
+  .viewer-row .big-card { grid-area: 1 / 1 / 2 / 3; }
+  .viewer-row .arrow-btn:first-child { grid-area: 2 / 1; }
+  .viewer-row .arrow-btn:last-child { grid-area: 2 / 2; }
+}
 
 /* ------------------------------------------------------------------ */
 /* Welcome                                                             */
@@ -948,6 +967,50 @@ body[data-screen='welcome'] .sun, body[data-screen='reward'] .sun, body[data-scr
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
 
+/* iPad, upright: raise the size caps so the game fills the screen instead of sitting phone-sized in the middle. */
+@media (min-width: 700px) and (min-height: 900px) {
+  .topbar { min-height: 72px; }
+  .icon-btn { width: 72px; height: 72px; }
+  .icon-btn img { width: 44px; height: 44px; }
+  .icon-btn svg { width: 36px; height: 36px; }
+  .screen-title { font-size: 40px; }
+  .btn { min-height: 66px; font-size: 25px; padding: 12px 28px; border-radius: 24px; }
+  .btn.small { min-height: 48px; font-size: 18px; padding: 8px 16px; }
+  .logo { font-size: 88px; }
+  .home-mascot { width: min(40vw, 34vh, 400px); height: min(40vw, 34vh, 400px); }
+  .play-btn { width: min(28vw, 20vh, 230px); height: min(28vw, 20vh, 230px); }
+  .modes { max-width: 660px; gap: 16px; }
+  .mode-btn { font-size: 23px; padding: 14px 6px 12px; }
+  .mode-btn img { width: 84px; height: 84px; }
+  .sticker-count { font-size: 26px; min-height: 64px; }
+  .sticker-count img { width: 44px; height: 44px; }
+  .hold-label { font-size: 13px; }
+  .talk-row, .real-note { max-width: 760px; }
+  .talk-row .mascot { width: 136px; height: 142px; }
+  .bubble { font-size: 38px; padding: 16px 22px; min-height: 76px; }
+  .real-note { font-size: 18px; }
+  .trail i { width: 24px; height: 24px; }
+  .next-btn { width: 104px; height: 104px; }
+  .next-btn svg { width: 54px; height: 54px; }
+  .choices { gap: 24px; }
+  .choice { width: min(40vw, 30vh, 330px); padding: 10px; }
+  .choices.n2 .choice { width: min(42vw, 34vh, 380px); }
+  .big-card, .viewer-row .big-card { width: min(60vw, 40vh, 480px); }
+  .word-label { font-size: 60px; }
+  .arrow-btn { width: 84px; height: 84px; }
+  .arrow-btn svg { width: 40px; height: 40px; }
+  .reward .mascot { width: min(40vw, 26vh, 320px); height: min(40vw, 26vh, 320px); }
+  .gift { width: min(20vw, 160px); }
+  .prize { width: min(50vw, 34vh, 360px); }
+  .prize-name { font-size: 44px; }
+  .chip { font-size: 22px; min-height: 68px; }
+  .chip img { width: 44px; height: 44px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(164px, 1fr)); gap: 16px; }
+  .tile .name { font-size: 24px; }
+  .panel { max-width: 560px; font-size: 18px; padding: 24px; }
+  .panel h2 { font-size: 34px; }
+}
+
 /* Respect "Reduce Motion": keep the short tap feedback, stop the looping motion. */
 @media (prefers-reduced-motion: reduce) {
   .cloud, .spark, .sun::before, .castle i, .logo span, .play-btn, .mascot, .mascot .frames, .mascot img.talk, .mascot img.blink, .mascot .wand i, .mode-btn, .mode-btn img, .next-btn, .gift, .choice, .choice.hint, .prize::before, .burst i, .big-card.tap-me, .tile, .sticker, .pick, .chip, .trail i, .bubble, #app > * { animation: none !important; }
@@ -999,7 +1062,9 @@ body.calm .bubble { animation: fade-in 0.3s ease-out; }
 }
 
 /* First-run word picker */
-.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; margin: 10px 0 14px; max-height: 46vh; overflow-y: auto; touch-action: pan-y; padding: 2px; }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; margin: 10px 0 14px; padding: 2px; }
+/* Start rides along the bottom of the screen while the list scrolls, and settles under the last row at the end (the screen's own padding keeps it above the home indicator). */
+.pick-start { position: sticky; bottom: 8px; z-index: 2; box-shadow: 0 5px 0 var(--d), 0 0 0 6px #fff; }
 .pick { background: #fff; border: 3px solid var(--gray); border-radius: 16px; padding: 4px 2px 6px; display: flex; flex-direction: column; align-items: center; font-family: var(--font-fun); font-weight: 600; font-size: 15px; }
 .pick .pic { width: 52px; height: 52px; }
 .pick.on { border-color: var(--green); background: #E9FBEF; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25); }
@@ -1026,19 +1091,6 @@ body.calm .bubble { animation: fade-in 0.3s ease-out; }
 .sheet h3 { display: flex; align-items: center; gap: 8px; }
 .mini-thumb { display: inline-block; width: 30px; height: 30px; }
 textarea.notes { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; font-size: 16px; border-radius: 14px; border: 2px solid var(--gray-dark); resize: vertical; }
-
-/* Printable report (Print or save PDF) */
-#print-report { display: none; }
-@media print {
-  html, body { position: static; height: auto; overflow: visible; background: #fff; }
-  body > *:not(#print-report) { display: none !important; }
-  #print-report { display: block; font-family: var(--font-plain); color: #000; padding: 12px; }
-  #print-report h1 { font-size: 20px; margin: 0 0 4px; }
-  #print-report p { font-size: 12px; margin: 2px 0 8px; }
-  #print-report table { border-collapse: collapse; width: 100%; font-size: 9.5px; }
-  #print-report th, #print-report td { border: 1px solid #999; padding: 3px 4px; text-align: left; vertical-align: top; }
-  #print-report th { background: #eee; }
-}
 
 /* ------------------------------------------------------------------ */
 /* Round cues, and when the wizard cannot speak                        */

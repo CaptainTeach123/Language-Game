@@ -3,7 +3,7 @@
 A bright **listening game** made for **Anthony**, a toddler (around 30 months) with a speech delay, to help him **understand 50 important first words**. A friendly little cartoon wizard says a word ("Where's the ball?") and Anthony taps the matching **real photo**. Nothing asks him to talk. The game builds receptive language (understanding), which comes before speaking.
 
 - **Every line is a warm recorded voice** (made with ElevenLabs), with cheers that use Anthony's name: "Great job, Anthony!", "High five, Anthony!"
-- **Real photos** of every word: three similar ones to learn from, and one that looks different to check the word has really stuck.
+- **Real photos** of every word: two similar ones to learn from, a third similar one held back for the first check, and one that looks different for the second check, so a word has to be understood, not just a picture remembered.
 - **A cartoon castle world**: a fairytale castle on rolling green hills under a sunny, sparkly sky, with a spellbook, crystal ball and treasure chest for the menu, all drawn in the wizard's style. The wizard blinks, bobs, hops and waves, and his wand sparkles; screens slide in and pictures pop into place (all of it stops while a word is being said, and with "Reduce Motion" on).
 
 - It installs on an **iPhone** like an app: full screen, its own Home Screen icon, and it works offline.
@@ -29,7 +29,7 @@ The design follows a research brief on receptive "hear the word, tap the picture
 
 **Play together.** A short card before each session reminds the grown-up to sit beside Anthony, say the word too, wait, and not point. After the session, a card suggests how to use today's words with real things, and **Real things** mode shows the picture while you hold up the real ball.
 
-**Each round.** A quiet half second to look, then "Where's the ball?" with the word last. Taps only count once the question has been said (so a tap means "I heard you"), and two-finger, palm and rapid repeat taps are ignored. If Anthony waits: "Find the ball!", then the right picture glows with "Here's the ball!" (counted as *needed a hint*). A wrong tap gets a calm "Hmm, let's look. This is the ball." and a do-over with the pictures moved. A right tap gets short, varied praise ("Yes!", "You found it, Anthony!") and "That's the ball!"
+**Each round.** The pictures settle first, then a quiet half second to look, then "Where's the ball?" with the word last. Taps only count once the question has really been heard (if the phone could not play the voice, the round waits and the wizard asks the grown-up to check the sound), and two-finger, palm and rapid repeat taps are ignored. If Anthony waits: "Find the ball!", then the right picture glows with "Here's the ball! Touch the ball." (counted as *needed a hint*). A wrong tap gets a calm "Hmm, let's look. This is the ball. Touch the ball!", he touches the glowing answer, and the same round is asked again with the pictures moved. A right tap gets short, varied praise ("Yes!", "You found it, Anthony!") and "That's the ball!"
 
 **New words** start with a single big picture: "Here's the ball! Touch the ball."
 
@@ -39,21 +39,22 @@ The design follows a research brief on receptive "hear the word, tap the picture
 - A word starts with **2 pictures**, moves to **3**, then **4** at about 80% found with no hint across 2 sessions, and drops back after 2 sessions under 50%.
 - Other words still being learned are mixed in as wrong choices, so the answer can't be found by ruling out words he already knows. Words that sound alike ("cat" and "hat") or look alike (two face close-ups) are never shown together.
 - At 4 pictures and about 80% on 2 different days, a word moves to **Review**: it's checked again 2 days and 7 days later, each time with a photo he hasn't seen. Passing both makes it **Mastered**. Mastered words still come back now and then, and go back to learning if missed twice in a row.
-- Sessions are 10 to 20 pictures and stop by themselves after 5 or 10 minutes, always ending on a success. About 60% of each session is words being learned, 30% review and 10% older words, with only 1 or 2 new words at a time.
+- Sessions are 10 to 20 pictures and stop by themselves after 5 or 10 minutes, always ending on a success. About 60% of each session is words being learned, 30% review and 10% older words (only when their check is due), with only 1 or 2 new words at a time. Every word that plays gets at least two turns, no word more than four, and words that had to wait go first next time.
+- A phone call, Siri or the lock screen pauses the session; it carries on where it left off when the game is back. The house button that ends a session needs a press-and-hold, so a stray tap can't stop the game.
 
 ## The grown-ups area
 
 **Press and hold the purple gear** on the home screen for about 2 seconds.
 
 - **Progress:** words mastered, in review and being learned, a 7-day chart, today's minutes and accuracy, and progress by category.
-- **Report for the speech therapist:** a spreadsheet (CSV) or printable page with, for every word: stage, pictures shown, trials, % correct with no hint, how often a hint was needed, wrong first taps, right on the do-over, photos used, dates introduced and mastered, and your notes.
+- **Report for the speech therapist:** a spreadsheet (CSV) or a page to print or share with, for every word: stage, pictures shown, sessions, trials, % correct with no hint, recent accuracy, how often a hint was needed, wrong first taps, right on the do-over, photos used, dates introduced, last tested and mastered, the next check, and your notes, plus a day-by-day table of practice.
 - **Words:** start, pause or resume words, and tap the pencil on a word to:
   - **add photos** of Anthony's own things and people (for Mommy, Daddy and baby your photos replace the stock photos, and "Anthony" joins the game once there's a photo of him),
   - mark it as **already understood**,
   - write **notes** (these go in the report),
   - see a way to say it in play and in real life.
 - **Everyday words** (up, more, all done...) with tips and baby signs for daily routines.
-- **Settings:** words learning at once, pictures per session, time limit, sound effects, backup and restore.
+- **Settings:** words learning at once, pictures per session, when to stop, sound effects, backup and restore (the backup holds progress and notes; photos stay on the phone).
 - **Help:** playing together, how the stages work, screen-time guidance, and when to ask for a speech-language evaluation.
 
 Everything stays on the phone: no accounts, no ads, no tracking.
@@ -93,7 +94,7 @@ img/photos/             151 word photos (WebP): <word>-1..4.webp and one per eve
 img/stickers, img/ui, img/icons   stickers, the wizard (quiet, talking and blinking), castle, hills, icons (all WebP) and the PNG app icons
 sw.js                   offline cache: the app shell first, the media in the background, unchanged files kept across versions (file list and hashes generated by tools/build-sw.js)
 tests/                  unit and data tests (node --test)
-tools/voice/            the spoken lines (lines.js) and the clip splitter (split_voice.py)
+tools/voice/            the spoken lines (lines.js), the clip splitter (split_voice.py) and re-trimmer (tighten.py)
 tools/photos/           the photo prompts (prompts.js) and the sheet cropper (crop.py)
 tools/                  offline-list builder, icon renderer, picture cut-out and WebP converters, end-to-end playthrough
 ```
@@ -106,9 +107,9 @@ npm run e2e      # plays through every screen at iPhone sizes and saves screensh
 npm run icons    # re-render the app icons from the wizard (needs Playwright)
 ```
 
-**Voice.** `node tools/voice/lines.js` prints every line, grouped the way they were generated with ElevenLabs (voice "Emma - Bright Kids Educator", model `eleven_multilingual_v2`): one generation per word, and groups of up to six for shared lines, with a 1.5 s break between lines. `tools/voice/split_voice.py` cuts each generation into one small MP3 per line. To change a line, regenerate its group, split it, and run the tests.
+**Voice.** `node tools/voice/lines.js` prints every line, grouped the way they were generated with ElevenLabs (voice "Emma - Bright Kids Educator", model `eleven_multilingual_v2`): one generation per word, and groups of up to six for shared lines, with a 1.5 s break between lines. `tools/voice/split_voice.py` cuts each generation into one small MP3 per line, keeps a quarter second of ring-out so no line stops dead, and squeezes pauses inside a line to 0.4 s; `tools/voice/tighten.py` re-trims clips that are already split. To change a line, regenerate its group (two or three takes, then keep the one that ends softly and isn't rushed), split it, and run the tests.
 
-**Photos.** `tools/photos/prompts.js` has the prompt for each word: a 2x2 sheet of real photos on white (three similar, one different-looking), generated with ElevenLabs image generation (GPT Image 2, 2048x2048). `tools/photos/crop.py` cuts each sheet into four 520 px WebP pictures.
+**Photos.** `tools/photos/prompts.js` has the prompt for each word: a 2x2 sheet of real photos on white (three similar, one different-looking; photos 1 and 2 teach, 3 is held for the first review check, 4 for the second), generated with ElevenLabs image generation (GPT Image 2, 2048x2048). `tools/photos/crop.py` finds the white gutter at each cell's edge, cuts past it (so sky and night-sky photos never show a white line) and saves four 520 px WebP pictures.
 
 **Pictures.** Everything the game shows is WebP (a third to an eighth of the size of PNG or JPEG at the same look; iPhones have shown it since iOS 14). `tools/webp.py` converts a PNG or JPEG; `tools/cutout.py` removes a white background first. The app icons stay PNG, as the Home Screen expects.
 
