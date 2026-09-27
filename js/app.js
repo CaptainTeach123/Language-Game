@@ -216,7 +216,9 @@
     return {
       text: {
         prompt: (plural ? 'Where are the ' : 'Where\'s ' + t) + l + '?',
-        learn: (plural ? 'Here are the ' : 'Here\'s ' + t) + l + '! Touch ' + t + l + '.'
+        learn: (plural ? 'Here are the ' : 'Here\'s ' + t) + l + '! Touch ' + t + l + '.',
+        look: 'Hmm, let\'s look. ' + (plural ? 'These are the ' : 'This is ' + t) + l + '. Touch ' + t + l + '!',
+        thats: (plural ? 'Those are the ' : 'That\'s ' + t) + l + '!'
       },
       learn: [c('here'), { pause: 350 }, c('touch')],
       prompt: [c('where')],
@@ -997,8 +999,10 @@
     function ask(parts) {
       lock();
       var my = ++waitToken;
-      later(function () { if (my === waitToken) voiceProblem(); }, 9000); // the clip never came
+      var heard = false;
+      later(function () { if (my === waitToken && !heard) voiceProblem(); }, 9000); // the clip never came
       return Speech.say(parts).then(function (ok) {
+        heard = true;
         if (my !== waitToken || !rc.alive()) return;
         if (ok !== true) { if (ok === 'silent') voiceProblem(); return; }
         unlock();
@@ -1016,6 +1020,7 @@
       waitToken += 1;
       var my = waitToken;
       targetBtn.classList.add('hint');
+      s.bubble.textContent = L.text.learn;
       Speech.say(L.hint);
       later(function () { if (my === waitToken && mode === 'hint') Speech.say(L.touch); }, 4500);
       later(function () {
@@ -1056,6 +1061,7 @@
         btn.classList.add('right');
         animatePic(btn.querySelector('.pic'), w);
         var my = waitToken;
+        s.bubble.textContent = L.text.thats;
         Speech.say(L.thats).then(function () { if (rc.alive() && my === waitToken) later(correction, 400); });
         later(function () { if (rc.alive() && my === waitToken) correction(); }, 4000);
         return;
@@ -1091,6 +1097,7 @@
       lock();
       btn.classList.add('dim');
       var mine = waitToken;
+      s.bubble.textContent = L.text.look;
       Speech.say(L.look).then(function () {
         if (!rc.alive() || mine !== waitToken) return null;
         targetBtn.classList.add('hint');
@@ -1110,6 +1117,7 @@
       mode = 'correction';
       waitToken += 1;
       lock();
+      s.bubble.textContent = L.text.prompt;
       var newPos = P.placeTarget(field, Array.prototype.indexOf.call(grid.children, targetBtn), Math.random);
       build(newPos);
       grid.classList.remove('reshow');
