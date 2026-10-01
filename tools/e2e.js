@@ -74,10 +74,14 @@ async function run() {
   async function ttsCheck(page) {
     if (await page.evaluate(() => window.__tts)) errors.push('the computer voice was used');
   }
-  // Let a tapped element finish popping in first (a toddler is slower than Playwright).
+  // Let a tapped element finish popping in first (a toddler is slower than Playwright),
+  // and bring it to the middle of the screen so nothing sticky (the Start button) sits over it.
   const tap = async (page, sel) => {
     await page.waitForSelector(sel);
-    await page.$eval(sel, (el) => el.getAnimations().forEach((a) => { try { a.finish(); } catch (e) { /* endless ones */ } }));
+    await page.$eval(sel, (el) => {
+      el.getAnimations().forEach((a) => { try { a.finish(); } catch (e) { /* endless ones */ } });
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    });
     await page.click(sel, { force: true });
   };
   const round = (page) => page.evaluate(() => {
