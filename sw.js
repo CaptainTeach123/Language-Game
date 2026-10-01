@@ -8,7 +8,7 @@
  * version copies every unchanged file from the previous cache instead of
  * downloading it again.
  */
-const VERSION = '0f25d641a5';
+const VERSION = 'a4739a74c0';
 const CACHE = 'word-wizard-' + VERSION;
 const MANIFEST = '__manifest__'; // the (file -> hash) list, kept inside the cache
 const ASSETS = [
@@ -17,11 +17,11 @@ const ASSETS = [
   ['index.html', 'a6f8b84e'],
   ['manifest.webmanifest', 'c6e19c16'],
   ['css/app.css', '1621d673'],
-  ['js/app.js', 'd52b823c'],
+  ['js/app.js', '7c1e9e4c'],
   ['js/audio.js', '991d7834'],
   ['js/progress.js', '0b2c5357'],
   ['js/storage.js', '44cd6e0f'],
-  ['js/words.js', '013b4797'],
+  ['js/words.js', 'd6dbde51'],
   ['fonts/fredoka-latin.woff2', '27d49d7c'],
   ['img/ui/castle.webp', '9d696ccd'],
   ['img/ui/chest.webp', '4c32de45'],
@@ -171,6 +171,7 @@ const ASSETS = [
   ['img/photos/juice-2.webp', '39035fb9'],
   ['img/photos/juice-3.webp', '2d04e8be'],
   ['img/photos/juice-4.webp', '6aba2d02'],
+  ['img/photos/me-1.webp', '0109a729'],
   ['img/photos/milk-1.webp', 'a5954af4'],
   ['img/photos/milk-2.webp', '38ccc17d'],
   ['img/photos/milk-3.webp', 'b029e13c'],

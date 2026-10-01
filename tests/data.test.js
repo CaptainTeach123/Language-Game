@@ -30,7 +30,11 @@ test('every picture word is concrete and has real photos: 2 similar to learn fro
     assert.ok(/\{[wW]\}/.test(w.phrase), `${w.id}: phrase should include the word`);
     const ex = D.photos(w);
     if (w.personal) {
-      assert.equal(ex.length, 0, 'Anthony is only ever shown in a grown-up\'s photo');
+      assert.ok(ex.length >= 1, `${w.id}: a built-in photo of Anthony`);
+      ex.forEach((e) => {
+        assert.equal(e.style, 'photo');
+        assert.ok(exists(e.src), `${w.id}: missing ${e.src}`);
+      });
       return;
     }
     assert.equal(ex.filter((e) => e.tier === 'narrow').length, 2, `${w.id}: 2 similar photos for learning`);
@@ -74,10 +78,14 @@ test('every photo file is used, and every sticker has a picture', () => {
   D.STICKERS.forEach((s) => assert.ok(exists(`img/stickers/${s.id}.webp`), `${s.id}: missing picture`));
 });
 
-test('photo prompts cover every photo', () => {
+test('photo prompts cover every photo (except the family\'s own photos of Anthony)', () => {
   const sheets = require('../tools/photos/prompts.js').sheets();
   const cells = new Set([].concat(...Object.values(sheets).map((s) => s.cells)).filter(Boolean));
-  fs.readdirSync(path.join(ROOT, 'img/photos')).forEach((f) => assert.ok(cells.has(f.replace('.webp', '')), f));
+  const family = new Set(D.PICTURE_WORDS.filter((w) => w.personal).flatMap((w) => D.photos(w).map((e) => path.basename(e.src, '.webp'))));
+  fs.readdirSync(path.join(ROOT, 'img/photos')).forEach((f) => {
+    const name = f.replace('.webp', '');
+    assert.ok(cells.has(name) || family.has(name), f);
+  });
 });
 
 test('every picture animation has CSS', () => {

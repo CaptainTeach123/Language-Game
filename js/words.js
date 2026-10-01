@@ -28,7 +28,7 @@
  *   look    look-alike group; never shown side by side in the game
  *   anim    small animation on the picture when it is found
  *   phrase  short model sentence for grown-ups and the picture book ({w} = word, {W} = Capitalised)
- *   personal  needs a grown-up's photo before it can be played ("me")
+ *   personal  the child himself ("me"): `photos` built-in pictures of him, which the family's own photos replace
  * Everyday words have one photo (img/photos/<id>.webp), `life` (how to use
  * the word in routines) and sometimes `sign`.
  */
@@ -54,7 +54,7 @@
     { id: 'mommy', word: 'Mommy', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'I love {w}!' },
     { id: 'daddy', word: 'Daddy', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'Here comes {w}!' },
     { id: 'baby', word: 'baby', cat: 'people', kind: 'noun', look: 'person', anim: 'rock', phrase: 'Rock the {w}.' },
-    { id: 'me', word: 'Anthony', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'Look, it\'s {w}!', personal: true },
+    { id: 'me', word: 'Anthony', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'Look, it\'s {w}!', personal: true, photos: 1 },
 
     // Animals
     { id: 'dog', word: 'dog', cat: 'animals', kind: 'noun', anim: 'hop', phrase: 'The {w} says woof woof!' },
@@ -155,8 +155,15 @@
   // The built-in photos of a picture word, as exemplars (none for "me").
   var PHOTOS_PER_WORD = 4;
   function photos(w) {
-    if (w.personal) return [];
     var list = [];
+    if (w.personal) {
+      // Anthony's own pictures: all alike (the last one is kept for the review check when there are two or more).
+      var own = w.photos | 0;
+      for (var m = 1; m <= own; m++) {
+        list.push({ key: w.id + '@' + m, src: 'img/photos/' + w.id + '-' + m + '.webp', style: 'photo', tier: own >= 2 && m === own ? 'wide' : 'narrow' });
+      }
+      return list;
+    }
     for (var n = 1; n <= PHOTOS_PER_WORD; n++) {
       list.push({ key: w.id + '@' + n, src: 'img/photos/' + w.id + '-' + n + '.webp', style: 'photo',
         tier: n === PHOTOS_PER_WORD ? 'wide' : (n === PHOTOS_PER_WORD - 1 ? 'held' : 'narrow') });

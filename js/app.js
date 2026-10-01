@@ -121,11 +121,11 @@
     return keys;
   }
   function hasPhoto(w) { return photoKeys(w).length > 0; }
-  // "me" (Anthony) can only be played once there's a photo of him.
+  // "me" (Anthony) can only be played once there's a photo of him (built in, or added by a grown-up).
   function available(id) {
     var w = D.byId[id];
     if (!w || w.everyday) return false;
-    return !w.personal || hasPhoto(w);
+    return !w.personal || hasPhoto(w) || D.photos(w).length > 0;
   }
   function photoWordCount() {
     return PICTURE_WORDS.filter(function (w) { return hasPhoto(w); }).length;
@@ -496,7 +496,7 @@
   SCREENS.welcome = function () {
     var chosen = [];
     var grid = h('div', { class: 'pick-grid' });
-    PICTURE_WORDS.filter(function (w) { return !w.personal; }).forEach(function (w, i) {
+    PICTURE_WORDS.filter(function (w) { return available(w.id); }).forEach(function (w, i) {
       var tile = h('button', { class: 'pick', style: '--i:' + Math.min(i, 14), 'aria-pressed': 'false', 'aria-label': label(w) }, picture(w), h('span', { text: label(w) }));
       // Small thumbnails, many of them below the fold: let the wizard load first.
       tile.querySelector('img').setAttribute('loading', 'lazy');
@@ -1613,7 +1613,7 @@
 
   function wordStatsText(w) {
     var st = P.peek(state, w.id);
-    if (w.personal && !hasPhoto(w)) return 'Add a photo of ' + CHILD + ' to use this word';
+    if (!available(w.id)) return 'Add a photo of ' + CHILD + ' to use this word';
     var bits = [];
     if (st.trials) bits.push('Found ' + st.correct + ' of ' + st.trials + ' with no hint (' + Math.round(st.correct / st.trials * 100) + '%)');
     if (st.prompted) bits.push('needed a hint ' + (st.prompted === 1 ? 'once' : st.prompted + ' times'));
@@ -1729,7 +1729,9 @@
     }
 
     var intro = h('p', { class: 'p-muted', text: w.personal
-      ? 'This word is ' + CHILD + '. Add a photo of him to include it in the game.'
+      ? (D.photos(w).length
+        ? 'This word is ' + CHILD + '. A photo of him is built in; any photos you add replace it.'
+        : 'This word is ' + CHILD + '. Add a photo of him to include it in the game.')
       : (w.look === 'person' ? 'Your photos replace the stock photos of this word.' : 'Your photos are shown first, then the built-in photos.') });
 
     // Photos (several per word)
