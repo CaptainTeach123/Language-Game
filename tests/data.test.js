@@ -11,11 +11,11 @@ const ROOT = path.join(__dirname, '..');
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
-test('50 words: 35 picture words for the game and 15 everyday words', () => {
-  assert.equal(D.WORDS.length, 50);
-  assert.equal(D.PICTURE_WORDS.length, 35);
+test('51 words: 36 picture words for the game and 15 everyday words', () => {
+  assert.equal(D.WORDS.length, 51);
+  assert.equal(D.PICTURE_WORDS.length, 36);
   assert.equal(D.EVERYDAY_WORDS.length, 15);
-  assert.equal(new Set(D.WORDS.map((w) => w.id)).size, 50);
+  assert.equal(new Set(D.WORDS.map((w) => w.id)).size, 51);
 });
 
 test('the introduction order covers every picture word exactly once', () => {
@@ -29,8 +29,8 @@ test('every picture word is concrete and has real photos: 2 similar to learn fro
     assert.ok(kinds.has(w.kind), `${w.id}: kind`);
     assert.ok(/\{[wW]\}/.test(w.phrase), `${w.id}: phrase should include the word`);
     const ex = D.photos(w);
-    if (w.personal) {
-      assert.ok(ex.length >= 1, `${w.id}: a built-in photo of Anthony`);
+    if (w.personal || 'photos' in w) {
+      assert.ok(ex.length >= 1, `${w.id}: a built-in family photo`);
       ex.forEach((e) => {
         assert.equal(e.style, 'photo');
         assert.ok(exists(e.src), `${w.id}: missing ${e.src}`);
@@ -81,7 +81,7 @@ test('every photo file is used, and every sticker has a picture', () => {
 test('photo prompts cover every photo (except the family\'s own photos of Anthony)', () => {
   const sheets = require('../tools/photos/prompts.js').sheets();
   const cells = new Set([].concat(...Object.values(sheets).map((s) => s.cells)).filter(Boolean));
-  const family = new Set(D.PICTURE_WORDS.filter((w) => w.personal).flatMap((w) => D.photos(w).map((e) => path.basename(e.src, '.webp'))));
+  const family = new Set(D.PICTURE_WORDS.filter((w) => w.personal || 'photos' in w).flatMap((w) => D.photos(w).map((e) => path.basename(e.src, '.webp'))));
   fs.readdirSync(path.join(ROOT, 'img/photos')).forEach((f) => {
     const name = f.replace('.webp', '');
     assert.ok(cells.has(name) || family.has(name), f);

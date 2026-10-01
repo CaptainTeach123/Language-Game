@@ -1627,7 +1627,7 @@
   function wordsTab(body) {
     body.appendChild(pCard('Photos of ' + CHILD + '\'s world',
       h('p', { text: 'Every word comes with real photos. Photos of ' + CHILD + '\'s own things and people are even better: they help words carry over to real life.' }),
-      h('p', { class: 'p-muted', text: 'Tap the pencil on a word to add up to ' + MAX_PHOTOS + ' photos. For Mommy, Daddy and baby, your photos replace the stock ones. ' +
+      h('p', { class: 'p-muted', text: 'Tap the pencil on a word to add up to ' + MAX_PHOTOS + ' photos. For Mommy, Daddy, baby, Grandma and Anthony, your photos replace the built-in ones. ' +
         'Words with your photos: ' + photoWordCount() + '.' })));
 
     var filters = [['all', 'All'], ['learning', 'Learning'], ['review', 'Review'], ['mastered', 'Mastered'], ['new', 'Not started']];
@@ -1728,11 +1728,10 @@
       title.textContent = label(w);
     }
 
-    var intro = h('p', { class: 'p-muted', text: w.personal
-      ? (D.photos(w).length
-        ? 'This word is ' + CHILD + '. A photo of him is built in; any photos you add replace it.'
-        : 'This word is ' + CHILD + '. Add a photo of him to include it in the game.')
-      : (w.look === 'person' ? 'Your photos replace the stock photos of this word.' : 'Your photos are shown first, then the built-in photos.') });
+    var intro = h('p', { class: 'p-muted', text: w.personal && !D.photos(w).length
+      ? 'This word is ' + CHILD + '. Add a photo of him to include it in the game.'
+      : ('photos' in w ? 'A photo of ' + label(w) + ' is built in; any photos you add replace it.'
+        : (w.look === 'person' ? 'Your photos replace the stock photos of this word.' : 'Your photos are shown first, then the built-in photos.')) });
 
     // Photos (several per word)
     var photoGrid = h('div', { class: 'photo-grid' });

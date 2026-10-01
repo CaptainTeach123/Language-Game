@@ -28,7 +28,9 @@
  *   look    look-alike group; never shown side by side in the game
  *   anim    small animation on the picture when it is found
  *   phrase  short model sentence for grown-ups and the picture book ({w} = word, {W} = Capitalised)
- *   personal  the child himself ("me"): `photos` built-in pictures of him, which the family's own photos replace
+ *   photos  how many built-in family photos a person without stock pictures has (<id>-1.webp ... <id>-N.webp:
+ *           Anthony, Grandma); the family's own photos replace them
+ *   personal  the child himself ("me")
  * Everyday words have one photo (img/photos/<id>.webp), `life` (how to use
  * the word in routines) and sometimes `sign`.
  */
@@ -54,6 +56,7 @@
     { id: 'mommy', word: 'Mommy', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'I love {w}!' },
     { id: 'daddy', word: 'Daddy', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'Here comes {w}!' },
     { id: 'baby', word: 'baby', cat: 'people', kind: 'noun', look: 'person', anim: 'rock', phrase: 'Rock the {w}.' },
+    { id: 'grandma', word: 'Grandma', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: '{W} loves you!', photos: 1 },
     { id: 'me', word: 'Anthony', cat: 'people', kind: 'name', look: 'person', anim: 'bounce', phrase: 'Look, it\'s {w}!', personal: true, photos: 1 },
 
     // Animals
@@ -124,7 +127,7 @@
   // New picture words are introduced in this order (most common, everyday
   // things first; body parts later), 1-2 at a time.
   var START_ORDER = [
-    'mommy', 'daddy', 'ball', 'dog', 'banana', 'milk', 'book', 'car', 'baby', 'cat',
+    'mommy', 'daddy', 'ball', 'dog', 'banana', 'milk', 'book', 'car', 'baby', 'grandma', 'cat',
     'cookie', 'shoes', 'duck', 'apple', 'cup', 'bath', 'bed', 'hat', 'juice', 'fish',
     'bird', 'cow', 'teddy', 'bubbles', 'water', 'socks', 'pig', 'sun', 'moon', 'nose',
     'eyes', 'feet', 'mouth', 'ears', 'me'
@@ -156,8 +159,8 @@
   var PHOTOS_PER_WORD = 4;
   function photos(w) {
     var list = [];
-    if (w.personal) {
-      // Anthony's own pictures: all alike (the last one is kept for the review check when there are two or more).
+    if (w.personal || 'photos' in w) {
+      // The family's own pictures (Anthony, Grandma): all alike; the last one is kept for the review check when there are two or more.
       var own = w.photos | 0;
       for (var m = 1; m <= own; m++) {
         list.push({ key: w.id + '@' + m, src: 'img/photos/' + w.id + '-' + m + '.webp', style: 'photo', tier: own >= 2 && m === own ? 'wide' : 'narrow' });

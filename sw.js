@@ -8,7 +8,7 @@
  * version copies every unchanged file from the previous cache instead of
  * downloading it again.
  */
-const VERSION = 'a4739a74c0';
+const VERSION = '92640db2f9';
 const CACHE = 'word-wizard-' + VERSION;
 const MANIFEST = '__manifest__'; // the (file -> hash) list, kept inside the cache
 const ASSETS = [
@@ -17,11 +17,11 @@ const ASSETS = [
   ['index.html', 'a6f8b84e'],
   ['manifest.webmanifest', 'c6e19c16'],
   ['css/app.css', '1621d673'],
-  ['js/app.js', '7c1e9e4c'],
+  ['js/app.js', '8a0cdab3'],
   ['js/audio.js', '991d7834'],
   ['js/progress.js', '0b2c5357'],
   ['js/storage.js', '44cd6e0f'],
-  ['js/words.js', 'd6dbde51'],
+  ['js/words.js', '672b28ea'],
   ['fonts/fredoka-latin.woff2', '27d49d7c'],
   ['img/ui/castle.webp', '9d696ccd'],
   ['img/ui/chest.webp', '4c32de45'],
@@ -161,6 +161,7 @@ const ASSETS = [
   ['img/photos/fish-3.webp', '0b6a31c7'],
   ['img/photos/fish-4.webp', '45d374d7'],
   ['img/photos/go.webp', '17bc827c'],
+  ['img/photos/grandma-1.webp', '38a19d8b'],
   ['img/photos/hat-1.webp', 'a5edd6bb'],
   ['img/photos/hat-2.webp', 'eaa6bdaf'],
   ['img/photos/hat-3.webp', '968ac496'],
@@ -520,6 +521,14 @@ const ASSETS = [
   ['audio/fish-touch.mp3', '9e21605e'],
   ['audio/fish-where.mp3', 'c039b3bb'],
   ['audio/fish-word.mp3', '8e5a3418'],
+  ['audio/grandma-find.mp3', 'c1f91418'],
+  ['audio/grandma-here.mp3', '8debf3b1'],
+  ['audio/grandma-phrase.mp3', 'b801b64d'],
+  ['audio/grandma-thats.mp3', '3de85c25'],
+  ['audio/grandma-this.mp3', '61fa01af'],
+  ['audio/grandma-touch.mp3', 'd5afaf68'],
+  ['audio/grandma-where.mp3', '3c8fcd2e'],
+  ['audio/grandma-word.mp3', '8e631171'],
   ['audio/hat-find.mp3', '79c5ce2a'],
   ['audio/hat-here.mp3', '30aa7ad6'],
   ['audio/hat-phrase.mp3', '71d10607'],
